@@ -16,15 +16,30 @@ st.set_page_config(page_title="Tablero Operativo Bolsas", layout="wide")
 # ---------------------------------------------------------
 ocultar_iconos = """
 <style>
-/* Oculta el menú de hamburguesa y el icono de GitHub en la esquina superior derecha */
-#MainMenu {visibility: hidden;}
-[data-testid="stToolbar"] {visibility: hidden;}
+/* 1. Ocultar el encabezado completo (desaparece Fork, GitHub y Menú) */
+[data-testid="stHeader"] {
+    display: none !important;
+}
 
-/* Oculta el botón de "Deploy" si llega a aparecer */
-.stDeployButton {display:none;}
+/* 2. Ocultar barra de herramientas secundaria por seguridad */
+[data-testid="stToolbar"] {
+    display: none !important;
+}
 
-/* Oculta la marca de agua de "Made with Streamlit" en la parte inferior */
-footer {visibility: hidden;}
+/* 3. Ocultar el menú de hamburguesa nativo */
+#MainMenu {
+    display: none !important;
+}
+
+/* 4. Ocultar pie de página (marca de agua de Streamlit) */
+footer {
+    display: none !important;
+}
+
+/* 5. Ocultar el espacio en blanco que deja el encabezado al desaparecer */
+.stApp > header {
+    background-color: transparent !important;
+}
 </style>
 """
 st.markdown(ocultar_iconos, unsafe_allow_html=True)

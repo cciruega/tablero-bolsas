@@ -9,6 +9,8 @@ import requests
 import zipfile
 import io
 
+st.set_page_config(page_title="Tablero Operativo Bolsas", layout="wide")
+
 # ---------------------------------------------------------
 # 🎨 ESTILOS CORPORATIVOS (OCULTAR ICONOS DE STREAMLIT/GITHUB)
 # ---------------------------------------------------------
@@ -27,8 +29,6 @@ footer {visibility: hidden;}
 """
 st.markdown(ocultar_iconos, unsafe_allow_html=True)
 # ---------------------------------------------------------
-
-st.set_page_config(page_title="Tablero Operativo Bolsas", layout="wide")
 
 # ---------------------------------------------------------
 # 🎛️ SELECTOR DE REGIÓN (NUEVO)

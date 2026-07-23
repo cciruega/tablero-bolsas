@@ -59,14 +59,38 @@ with col_selector:
     )
 # ---------------------------------------------------------
 
-# --- INYECCIÓN DE CSS PARA COMPACTAR LAS TABLAS ---
+# --- INYECCIÓN DE CSS PARA COMPACTAR Y HACER RESPONSIVAS LAS TABLAS ---
 st.markdown("""
     <style>
-        [data-testid="stTable"] { width: max-content !important; }
+        /* 💻 ESTILOS GENERALES (Pantallas de computadora) */
+        [data-testid="stTable"] { 
+            width: max-content !important; 
+            max-width: 100%; 
+            overflow-x: auto; /* Permite deslizar la tabla si no cabe */
+        }
         [data-testid="stTable"] table { width: auto !important; }
         [data-testid="stTable"] th, [data-testid="stTable"] td {
             white-space: nowrap !important;
             padding: 8px 15px !important;
+        }
+
+        /* 📱 ESTILOS PARA CELULARES (Pantallas más angostas que 768px) */
+        @media (max-width: 768px) {
+            [data-testid="stTable"] th, [data-testid="stTable"] td {
+                font-size: 10px !important; /* Letra mucho más pequeña */
+                padding: 4px 6px !important; /* Menos espacio entre columnas */
+            }
+            
+            /* Ajustamos también el tamaño de los títulos (Subheaders) para que no roben espacio */
+            [data-testid="stMarkdownContainer"] h3 {
+                font-size: 1.1rem !important;
+            }
+            
+            /* Hacemos los botones un poco más compactos */
+            .stButton > button {
+                padding: 2px 10px !important;
+                font-size: 12px !important;
+            }
         }
     </style>
 """, unsafe_allow_html=True)

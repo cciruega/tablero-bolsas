@@ -101,19 +101,34 @@ if archivo_a_procesar is not None:
             df = pd.read_excel(archivo_a_procesar, sheet_name='Detalle')
             df.columns = df.columns.str.strip()
             
-            # Limpieza Básica
-            columnas_clave = ['ULTIMOS_6_MESES', 'ESTATUS_AGR_N2', 'ESTATUS_AGR_N1', 'ETAPA_OS', 'PORTABILIDAD', 'TIPO_MOVIMIENTO']
+# Limpieza Básica
+            columnas_clave = ['ULTIMOS_6_MESES', 'ESTATUS_AGR_N2', 'ESTATUS_AGR_N1', 'ETAPA_OS', 'PORTABILIDAD', 'TIPO_MOVIMIENTO', 'ESTATUS_OS']
             for col in columnas_clave:
                 if col in df.columns:
                     df[col] = df[col].astype(str).str.strip().str.upper()
 
-            # 🧹 FILTRO DE LIMPIEZA DE DATOS GLOBAL (CT Vacíos y Tulancingo)
+            # 🧹 1. FILTRO DE ESTATUS: Conservar solo PENDIENTES
+            if 'ESTATUS_OS' in df.columns:
+                df = df[df['ESTATUS_OS'] == 'PENDIENTE']
+
+            # 🧹 2. FILTRO DE CT Y "PASES VIP" PARA BLANCOS
             if 'CT' in df.columns:
-                df = df.dropna(subset=['CT'])
-                df = df[
-                    (df['CT'].astype(str).str.upper() != 'CT TULANCINGO') & 
-                    (df['CT'].astype(str).str.strip() != '')
-                ]
+                # Adiós Tulancingo incondicionalmente
+                df = df[df['CT'].astype(str).str.upper() != 'CT TULANCINGO']
+                
+                # Identificamos cuáles CT vienen vacíos o nulos
+                es_ct_vacio = df['CT'].isna() | (df['CT'].astype(str).str.strip() == '')
+                
+                # Identificamos los estatus que tienen permitido no tener CT
+                estatus_n2 = df['ESTATUS_AGR_N2'].astype(str).str.upper()
+                pase_vip = estatus_n2.str.contains('4 EN VALIDACION') | estatus_n2.str.contains('6. PENDIENTE')
+                
+                # REGLA: Conservar los que SÍ tienen CT, o los que NO tienen pero tienen PASE VIP
+                df = df[~es_ct_vacio | (es_ct_vacio & pase_vip)]
+                
+                # Rellenamos los vacíos permitidos con "SIN CT" para que Pandas no choque en otras tablas
+                df['CT'] = df['CT'].fillna('SIN CT')
+                df.loc[df['CT'].astype(str).str.strip() == '', 'CT'] = 'SIN CT'
 
             # =========================================================
             # 🗺️ LÓGICA DE RUTEO POR REGIÓN

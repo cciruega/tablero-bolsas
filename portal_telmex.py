@@ -43,7 +43,7 @@ st.divider()
 # ---------------------------------------------------------
 def obtener_archivo_clarodrive():
     # Truco de ClaroDrive: Agregamos /download a tu liga para bajar la carpeta
-    url_carpeta = "https://go.clarodrive.com/EsujsHEt"
+    url_carpeta = "https://i0000.clarodrive.com/s/KRrAxbKcriJiwcK"
     url_descarga = url_carpeta.rstrip('/') + '/download'
     
     try:

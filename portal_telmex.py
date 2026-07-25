@@ -117,9 +117,23 @@ def obtener_archivo_clarodrive():
                     # Lo extraemos a la memoria
                     archivo_bytes = io.BytesIO(archivo_zip.read(excel_reciente.filename))
                     
-                    # Le damos formato a la fecha interna del ZIP
+                    # =========================================================
+                    # 🕒 AJUSTE DE ZONA HORARIA (UTC A CENTRO DE MÉXICO)
+                    # =========================================================
                     fecha_tupla = excel_reciente.date_time 
-                    fecha_str = f"{fecha_tupla[2]:02d}/{fecha_tupla[1]:02d}/{fecha_tupla[0]} {fecha_tupla[3]:02d}:{fecha_tupla[4]:02d}:{fecha_tupla[5]:02d}"
+                    
+                    # 1. Convertimos la tupla del ZIP a un formato de fecha manipulable
+                    fecha_utc = datetime.datetime(
+                        year=fecha_tupla[0], month=fecha_tupla[1], day=fecha_tupla[2],
+                        hour=fecha_tupla[3], minute=fecha_tupla[4], second=fecha_tupla[5]
+                    )
+                    
+                    # 2. Le restamos 6 horas (Diferencia de México respecto a UTC)
+                    fecha_mexico = fecha_utc - datetime.timedelta(hours=6)
+                    
+                    # 3. Lo convertimos al texto final
+                    fecha_str = fecha_mexico.strftime('%d/%m/%Y %H:%M:%S')
+                    # =========================================================
                     
                     return archivo_bytes, excel_reciente.filename, fecha_str
     except Exception:
@@ -133,7 +147,7 @@ archivo_a_procesar = None
 col1, col2 = st.columns([2, 1])
 with col1:
     if archivo_automatico:
-        st.success(f"☁️ **Base de datos (Claro Drive):** {nombre_corto}  \n⏱️ **Actualizado:** {fecha_actualizacion}")
+        st.success(f"☁️ **Base de datos (Sharepoint):** {nombre_corto}  \n⏱️ **Actualizado:** {fecha_actualizacion}")
         archivo_a_procesar = archivo_automatico
     else:
         st.warning("⚠️ No se pudo conectar con Claro Drive o la carpeta está vacía.")

@@ -398,7 +398,7 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
             with col_t3_der:
-                # 1. Extraemos las filas exactas (Ya incluye Subtotales y Gran Total)
+                # 1. Extraemos las filas exactas
                 df_captura = df_con_subtotales.copy().reset_index()
                 
                 # 2. Armamos el esqueleto base
@@ -424,10 +424,10 @@ if archivo_a_procesar is not None:
                             if col in df_base.columns:
                                 df_base.at[fila_idx, col] = val
                 
-                # 4. Multiplicación base (CTs)
+                # 4. Multiplicación base
                 df_base['Prod. Esp'] = df_base['Tecs'] * df_base['Comp/Tec']
                 
-                # 🔄 5. MOTOR DE AUTO-SUMAS PARA SUBTOTALES Y GRAN TOTAL
+                # 5. Motor de Auto-sumas
                 mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
                 
                 for area in df_base['AREA'].unique():
@@ -441,7 +441,7 @@ if archivo_a_procesar is not None:
                         df_base.loc[mask_sub, 'SIAC'] = df_base.loc[mask_area_cts, 'SIAC'].sum()
                         df_base.loc[mask_sub, 'Tecs'] = df_base.loc[mask_area_cts, 'Tecs'].sum()
                         df_base.loc[mask_sub, 'Prod. Esp'] = df_base.loc[mask_area_cts, 'Prod. Esp'].sum()
-                        df_base.loc[mask_sub, 'Comp/Tec'] = 0 # En los totales no suma el compromiso unitario
+                        df_base.loc[mask_sub, 'Comp/Tec'] = 0 
                 
                 mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
                 if mask_gran.any():
@@ -453,28 +453,42 @@ if archivo_a_procesar is not None:
                 # 6. Ocultamos la columna temporal AREA para limpiar la vista
                 df_mostrar = df_base.drop(columns=['AREA'])
                 
-                # Altura milimétricamente exacta a la tabla 1
-                alto_dinamico = int((len(df_mostrar) * 36) + 43)
+                # =========================================================
+                # 🎨 NUEVO: COLOR DE FILA PARA EL "TOTAL ÁREA"
+                # =========================================================
+                def pintar_totales(row):
+                    if 'TOTAL' in str(row['CT']).upper():
+                        # Color verde/azulado similar a la tabla izquierda
+                        return ['background-color: #A1C9D4; font-weight: bold; color: black;'] * len(row)
+                    return [''] * len(row)
                 
-                # Dibujamos
+                df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
+                # =========================================================
+
+                # 📏 Ajustamos la altura: Aumentamos los píxeles base para compensar el encabezado doble
+                alto_dinamico = int((len(df_mostrar) * 36) + 78) 
+                
+                # Dibujamos usando el DataFrame Estilizado
                 df_editado = st.data_editor(
-                    df_mostrar,
+                    df_estilizado, 
                     hide_index=True,
                     use_container_width=True,
                     height=alto_dinamico,
                     disabled=['CT', 'Folios', 'Prod. Esp'], 
                     key=llave_editor,
                     column_config={
-                        "CT": st.column_config.TextColumn(width="medium"),
-                        "Folios": st.column_config.NumberColumn(width=50),
-                        "SIAC": st.column_config.NumberColumn(width=60),
-                        "Tecs": st.column_config.NumberColumn(width=60),
-                        "Comp/Tec": st.column_config.NumberColumn(width=80),
-                        "Prod. Esp": st.column_config.NumberColumn(width=80)
+                        # 📏 NUEVO: Agregamos el salto de línea (\n) al final de cada nombre
+                        "CT": st.column_config.TextColumn("CT\n", width="medium"),
+                        "Folios": st.column_config.NumberColumn("Folios\n", width=50),
+                        "SIAC": st.column_config.NumberColumn("SIAC\n", width=60),
+                        "Tecs": st.column_config.NumberColumn("Tecs\n", width=60),
+                        "Comp/Tec": st.column_config.NumberColumn("Comp/Tec\n", width=80),
+                        "Prod. Esp": st.column_config.NumberColumn("Prod. Esp\n", width=80)
                     }
                 )
                 
                 # 7. Botón de Descarga
+                # Como pasamos un DataFrame con estilo, necesitamos extraer los datos puros para el CSV
                 df_descarga = df_editado.copy()
                 df_descarga = df_descarga.rename(columns={'Tecs': 'Tecnicos', 'Comp/Tec': 'Comp. x Tec.', 'Prod. Esp': 'Prod. Esperada'})
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")

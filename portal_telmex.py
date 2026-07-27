@@ -380,7 +380,7 @@ if archivo_a_procesar is not None:
 
         st.divider()
 
-# 3. Bolsa 5xDIL2 - Solo PS
+        # 3. Bolsa 5xDIL2 - Solo PS
         st.subheader("🛠 3. Ult 6 Meses (BOLSA 5xDIL2 - Solo PS)")
         
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
@@ -400,16 +400,15 @@ if archivo_a_procesar is not None:
             with col_t3_der:
                 st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
                 
-                # 1. 🌐 CONECTAR A GOOGLE SHEETS (Leyendo la pestaña de la Región Seleccionada)
+                # 1. 🌐 CONECTAR A GOOGLE SHEETS
                 url_sheet = "https://docs.google.com/spreadsheets/d/1cYHq6afeVavGNGSRPC3lPxzLN5E5wIqFFa2BSp0nxZY/edit?gid=0#gid=0"
                 try:
                     conn = st.connection("gsheets", type=GSheetsConnection)
-                    # El ttl=0 evita el caché, obligando a leer el dato real en vivo
                     df_historico = conn.read(spreadsheet=url_sheet, worksheet=region_seleccionada, ttl=0, usecols=[0,1,2,3,4,5])
                 except Exception as e:
                     df_historico = pd.DataFrame()
                 
-                # 2. BASE DE CTS (Tomados directo de tu Excel)
+                # 2. BASE DE CTS
                 df_captura = df_con_subtotales.copy().reset_index()
                 df_base = pd.DataFrame({
                     'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
@@ -418,9 +417,11 @@ if archivo_a_procesar is not None:
                 })
                 df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
                 
-                # 3. MERGE: Combinar la foto actual con lo guardado en Sheets
+                # 3. MERGE CORREGIDO: Evitar triplicidad filtrando los totales históricos
                 if not df_historico.empty and 'CT' in df_historico.columns:
-                    df_merge = pd.merge(df_base, df_historico[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
+                    # Filtramos las filas que digan "TOTAL" del Sheets para no duplicar el cruce
+                    df_hist_limpio = df_historico[~df_historico['CT'].astype(str).str.contains('TOTAL', case=False, na=False)].drop_duplicates(subset=['CT'])
+                    df_merge = pd.merge(df_base, df_hist_limpio[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
                 else:
                     df_merge = df_base.copy()
                     df_merge['SIAC'] = 0
@@ -433,6 +434,25 @@ if archivo_a_procesar is not None:
                 df_merge['Comp'] = df_merge['Comp'].fillna(0.0)
                 df_merge['Prod. Esp'] = df_merge['Prod. Esp'].fillna(0).astype(int)
                 
+                # 🔄 AUTO-SUMAS INICIALES (Para que no salgan en ceros al cargar la página)
+                mask_cts_ini = (~df_merge['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_merge['AREA'].astype(str).str.lower() != 'total')
+                for area in df_merge['AREA'].unique():
+                    if str(area).lower() != 'total':
+                        mask_area_cts_ini = mask_cts_ini & (df_merge['AREA'] == area)
+                        mask_sub_ini = (df_merge['AREA'] == area) & (df_merge['CT'].astype(str).str.contains('TOTAL', case=False))
+                        if mask_sub_ini.any():
+                            df_merge.loc[mask_sub_ini, 'SIAC'] = df_merge.loc[mask_area_cts_ini, 'SIAC'].sum()
+                            df_merge.loc[mask_sub_ini, 'Tecs'] = df_merge.loc[mask_area_cts_ini, 'Tecs'].sum()
+                            df_merge.loc[mask_sub_ini, 'Prod. Esp'] = df_merge.loc[mask_area_cts_ini, 'Prod. Esp'].sum()
+                            df_merge.loc[mask_sub_ini, 'Comp'] = 0
+                            
+                mask_gran_ini = df_merge['AREA'].astype(str).str.lower() == 'total'
+                if mask_gran_ini.any():
+                    df_merge.loc[mask_gran_ini, 'SIAC'] = df_merge.loc[mask_cts_ini, 'SIAC'].sum()
+                    df_merge.loc[mask_gran_ini, 'Tecs'] = df_merge.loc[mask_cts_ini, 'Tecs'].sum()
+                    df_merge.loc[mask_gran_ini, 'Prod. Esp'] = df_merge.loc[mask_cts_ini, 'Prod. Esp'].sum()
+                    df_merge.loc[mask_gran_ini, 'Comp'] = 0
+
                 df_mostrar = df_merge.drop(columns=['AREA'])
                 
                 def pintar_totales(row):
@@ -460,11 +480,10 @@ if archivo_a_procesar is not None:
                     }
                 )
                 
-                # 5. BOTÓN MAESTRO: Calcula, Separa por región y Acumula
+                # 5. BOTÓN MAESTRO: Calcula y Direcciona al Acumulado Correcto
                 if st.button(f"☁️ Guardar y Acumular ({region_seleccionada})", type="primary"):
                     df_guardar = df_editado.copy()
                     
-                    # A. Calcular Productividad y Sumas
                     df_guardar['Prod. Esp'] = (df_guardar['Tecs'] * df_guardar['Comp']).round().astype(int)
                     mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
                     
@@ -486,19 +505,18 @@ if archivo_a_procesar is not None:
                         df_guardar.loc[mask_gran, 'Comp'] = 0
                     
                     df_final_region = df_guardar[['CT', 'Folios', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']]
-                    
-                    # B. Guardar "Foto de Hoy" en su pestaña (Monterrey o Tamaulipas)
                     conn.update(spreadsheet=url_sheet, worksheet=region_seleccionada, data=df_final_region)
                     
-                    # C. LÓGICA DEL ACUMULADO HISTÓRICO
+                    # C. LÓGICA DEL ACUMULADO DINÁMICO (AcumuladoM / AcumuladoT)
+                    hoja_acumulado = "AcumuladoM" if "Monterrey" in region_seleccionada else "AcumuladoT"
                     fecha_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
+                    
                     df_hist_nuevo = df_final_region.copy()
                     df_hist_nuevo.insert(0, 'Fecha', fecha_hoy)
                     df_hist_nuevo.insert(1, 'Region', region_seleccionada)
                     
                     try:
-                        df_acumulado_base = conn.read(spreadsheet=url_sheet, worksheet="Acumulado", ttl=0)
-                        # Prevenir duplicados: Si ya habían guardado algo de esta región HOY, lo borramos de la memoria antes de sumar lo nuevo
+                        df_acumulado_base = conn.read(spreadsheet=url_sheet, worksheet=hoja_acumulado, ttl=0)
                         if not df_acumulado_base.empty and 'Fecha' in df_acumulado_base.columns:
                             mask_duplicados = (df_acumulado_base['Fecha'] == fecha_hoy) & (df_acumulado_base['Region'] == region_seleccionada)
                             df_acumulado_limpio = df_acumulado_base[~mask_duplicados]
@@ -507,9 +525,8 @@ if archivo_a_procesar is not None:
                     except:
                         df_acumulado_limpio = pd.DataFrame()
                     
-                    # Pegamos el historial viejo con la captura nueva y guardamos
                     df_final_acumulado = pd.concat([df_acumulado_limpio, df_hist_nuevo], ignore_index=True)
-                    conn.update(spreadsheet=url_sheet, worksheet="Acumulado", data=df_final_acumulado)
+                    conn.update(spreadsheet=url_sheet, worksheet=hoja_acumulado, data=df_final_acumulado)
 
                     st.success(f"¡Datos de {region_seleccionada} guardados exitosamente!")
                     st.rerun() 

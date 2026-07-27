@@ -62,21 +62,27 @@ with col_selector:
 # --- INYECCIÓN DE CSS PARA COMPACTAR, ESCALAR Y HACER RESPONSIVAS LAS TABLAS ---
 st.markdown("""
     <style>
-        /* 💻 ESTILOS GENERALES (Pantallas de computadora) */
+        /* 💻 ESTILOS GENERALES */
         [data-testid="stTable"] { 
             width: max-content !important; 
             max-width: 100%; 
             overflow-x: auto; 
-            font-size: 85% !important; /* 👈 Reduce el texto de las tablas al 85% */
+            font-size: 85% !important; 
         }
         [data-testid="stTable"] table { width: auto !important; }
         
-        [data-testid="stTable"] th, [data-testid="stTable"] td {
-            white-space: nowrap !important;
-            padding: 5px 10px !important; /* 👈 Espaciado más pequeño para que acompañe al 85% */
+        /* 👇 NUEVO: CENTRAR TÍTULOS DE LA TABLA ESTÁTICA */
+        [data-testid="stTable"] th {
+            text-align: center !important;
+            vertical-align: middle !important;
         }
 
-        /* 📱 ESTILOS PARA CELULARES (Pantallas más angostas que 768px) */
+        [data-testid="stTable"] th, [data-testid="stTable"] td {
+            white-space: nowrap !important;
+            padding: 5px 10px !important; 
+        }
+
+        /* 📱 ESTILOS PARA CELULARES */
         @media (max-width: 768px) {
             [data-testid="stTable"] th, [data-testid="stTable"] td {
                 font-size: 10px !important; 
@@ -382,33 +388,35 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            # --- ESTRUCTURA A DOS COLUMNAS (Ajustamos proporción para dar más espacio a la captura) ---
-            col_t3_izq, col_t3_der = st.columns([1.1, 1]) 
+            # --- ESTRUCTURA A DOS COLUMNAS (Proporción más equilibrada) ---
+            col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
             
-            # Procesamos la tabla izquierda primero para extraer los CTs
+            # Procesamos la tabla izquierda
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+            cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
+            
+            # 💡 TRUCO: Guardamos la tabla ya con subtotales en una variable para medirla después
+            df_con_subtotales = aplicar_subtotales(td_b5_ps[cols])
             
             with col_t3_izq:
-                # Dibujamos tabla izquierda al ras
-                cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
-                st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
+                st.table(estilo_resaltado(df_con_subtotales))
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
             with col_t3_der:
-                # 1. Extraemos los CTs de la tabla izquierda
+                # 1. Extraemos los CTs de la tabla original
                 df_captura = td_b5_ps.copy()
                 if 'Total' in df_captura.index.get_level_values(0):
                     df_captura = df_captura.drop('Total', level=0)
                 df_captura = df_captura.reset_index()
                 
-                # 2. Armamos el esqueleto base con NOMBRES CORTOS VISUALES (Evita scroll y cortes)
+                # 2. Armamos el esqueleto base
                 df_base = pd.DataFrame({
                     'CT': df_captura['CT'],
                     'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
                     'SIAC': 0,
-                    'Tecs': 0,        # Nombre compacto
-                    'Comp/Tec': 0.0,  # Nombre compacto
-                    'Prod. Esp': 0.0  # Nombre compacto
+                    'Tecs': 0,
+                    'Comp/Tec': 0.0,
+                    'Prod. Esp': 0.0
                 })
                 
                 # 3. Leemos los cambios del usuario en memoria
@@ -422,10 +430,13 @@ if archivo_a_procesar is not None:
                 # 4. Hacemos la multiplicación de la nueva columna
                 df_base['Prod. Esp'] = df_base['Tecs'] * df_base['Comp/Tec']
                 
-                # 5. Calculamos la altura exacta sin scroll vertical
-                alto_dinamico = int((len(df_base) * 36) + 43)
+                # -------------------------------------------------------------
+                # 📏 AJUSTE DE ALTURA: Usamos el largo de la tabla IZQUIERDA
+                # Esto obliga a la tabla derecha a estirarse para rellenar el hueco blanco.
+                alto_dinamico = int((len(df_con_subtotales) * 36) + 43)
+                # -------------------------------------------------------------
                 
-                # Dibujamos el editor interactivo
+                # 5. Dibujamos el editor interactivo
                 df_editado = st.data_editor(
                     df_base,
                     hide_index=True,
@@ -435,24 +446,17 @@ if archivo_a_procesar is not None:
                     key=llave_editor,
                     column_config={
                         "CT": st.column_config.TextColumn(width="medium"),
-                        "Folios": st.column_config.NumberColumn(width="small"),
-                        "SIAC": st.column_config.NumberColumn(width="small"),
-                        "Tecs": st.column_config.NumberColumn(width="small"),
-                        "Comp/Tec": st.column_config.NumberColumn(width="small"),
-                        "Prod. Esp": st.column_config.NumberColumn(width="small")
+                        "Folios": st.column_config.NumberColumn(width=50), # 👈 Forzado a 50 pixeles exactos
+                        "SIAC": st.column_config.NumberColumn(width=60),   # Ajustado fino
+                        "Tecs": st.column_config.NumberColumn(width=60),   # Ajustado fino
+                        "Comp/Tec": st.column_config.NumberColumn(width=80),
+                        "Prod. Esp": st.column_config.NumberColumn(width=80)
                     }
                 )
                 
-                # 6. Botón de Descarga del Cierre Diario
+                # 6. Botón de Descarga
                 df_descarga = df_editado.copy()
-                
-                # 🔄 RENOMBRAMOS A LOS TÍTULOS COMPLETOS PARA EL ARCHIVO EXCEL/CSV
-                df_descarga = df_descarga.rename(columns={
-                    'Tecs': 'Tecnicos',
-                    'Comp/Tec': 'Comp. x Tec.',
-                    'Prod. Esp': 'Prod. Esperada'
-                })
-                
+                df_descarga = df_descarga.rename(columns={'Tecs': 'Tecnicos', 'Comp/Tec': 'Comp. x Tec.', 'Prod. Esp': 'Prod. Esperada'})
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
                 df_descarga['Region'] = region_seleccionada
                 
@@ -468,7 +472,7 @@ if archivo_a_procesar is not None:
             st.info("No hay datos para la Bolsa 5 - Solo PS.")
         
         st.divider()
-
+        
         # 4. Bolsa 5 por Etapa
         st.subheader("⚙ 4. Ult 6 Meses (BOLSA 5 por Etapa)")
         df_b5 = df[df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)]

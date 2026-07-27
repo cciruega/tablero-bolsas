@@ -376,16 +376,75 @@ if archivo_a_procesar is not None:
 
         st.divider()
 
-        # 3. Bolsa 5xDIL2 - Solo PS
+# 3. Bolsa 5xDIL2 - Solo PS
         st.subheader("🛠 3. Ult 6 Meses (BOLSA 5xDIL2 - Solo PS)")
+        
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
-            td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
-            st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
-            generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
-        else: st.info("No hay datos.")
-
+            
+            # --- NUEVA ESTRUCTURA A DOS COLUMNAS ---
+            # Le damos 60% de espacio a la tabla original y 40% a la captura
+            col_t3_izq, col_t3_der = st.columns([1.5, 1]) 
+            
+            # LADO IZQUIERDO: La Tabla Original
+            with col_t3_izq:
+                td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
+                st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
+                generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
+            
+            # LADO DERECHO: El panel de Captura Operativa
+            with col_t3_der:
+                st.markdown("### 📝 Captura de Asistencia")
+                
+                # 1. Extraemos los CTs de la tabla original para que coincidan exacto
+                df_captura = td_b5_ps.copy()
+                if 'Total' in df_captura.index.get_level_values(0):
+                    df_captura = df_captura.drop('Total', level=0)
+                
+                df_captura = df_captura.reset_index()
+                
+                # 2. Armamos el esqueleto editable con ceros por defecto
+                df_editor = pd.DataFrame({
+                    'CT': df_captura['CT'],
+                    'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
+                    'SIAC': 0,
+                    'Tecnicos': 0,
+                    'Comp. x Tec.': 0.0 # Con decimales por si acaso
+                })
+                
+                st.info("✏️ Captura los datos (La Prod. Esperada se calculará abajo)")
+                
+                # 3. La magia del Editor Interactivo de Streamlit
+                df_editado = st.data_editor(
+                    df_editor,
+                    hide_index=True,
+                    use_container_width=True,
+                    disabled=['CT', 'Folios'], # Bloqueamos CT y Folios para que no los borren
+                    key='editor_t3'
+                )
+                
+                # 4. Cálculo Automático y adición de metadatos (Fecha y Región)
+                df_editado['Prod. Esperada'] = df_editado['Tecnicos'] * df_editado['Comp. x Tec.']
+                df_editado['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
+                df_editado['Region'] = region_seleccionada
+                
+                # 5. Mostramos la fila de resultados ya calculada
+                st.markdown("**📊 Vista Previa con Productividad:**")
+                st.dataframe(df_editado[['CT', 'SIAC', 'Tecnicos', 'Comp. x Tec.', 'Prod. Esperada']], hide_index=True, use_container_width=True)
+                
+                # 6. Botón de Descarga del Cierre
+                csv_cierre = df_editado.to_csv(index=False).encode('utf-8')
+                st.download_button(
+                    label="💾 Descargar Cierre Diario",
+                    data=csv_cierre,
+                    file_name=f"cierre_diario_asistencia_{region_seleccionada.lower()}.csv",
+                    mime='text/csv',
+                    key='btn_cierre_t3'
+                )
+        else: 
+            st.info("No hay datos.")
+        
         st.divider()
 
         # 4. Bolsa 5 por Etapa

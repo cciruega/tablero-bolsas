@@ -382,14 +382,14 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            # --- ESTRUCTURA A DOS COLUMNAS ALINEADAS ---
-            col_t3_izq, col_t3_der = st.columns([1.5, 1]) 
+            # --- ESTRUCTURA A DOS COLUMNAS (Ajustamos proporción para dar más ancho) ---
+            col_t3_izq, col_t3_der = st.columns([1.3, 1]) 
             
             # Procesamos la tabla izquierda primero para extraer los CTs
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
             
             with col_t3_izq:
-                # Dibujamos tabla izquierda al ras (Sin textos arriba para que no haya desfase)
+                # Dibujamos tabla izquierda al ras
                 cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
                 st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
@@ -410,7 +410,7 @@ if archivo_a_procesar is not None:
                     'Comp. x Tec.': 0.0
                 })
                 
-                # 3. TRUCO DE CÁLCULO EN VIVO: Leemos los cambios del usuario en memoria
+                # 3. Leemos los cambios del usuario en memoria
                 llave_editor = f"editor_t3_{region_seleccionada}"
                 if llave_editor in st.session_state:
                     cambios = st.session_state[llave_editor].get("edited_rows", {})
@@ -421,17 +421,31 @@ if archivo_a_procesar is not None:
                 # 4. Hacemos la multiplicación de la nueva columna
                 df_base['Prod. Esperada'] = df_base['Tecnicos'] * df_base['Comp. x Tec.']
                 
-                # 5. Dibujamos el editor interactivo (Al no poner textos, se alinea perfectamente con la tabla izquierda)
+                # -------------------------------------------------------------
+                # 📏 TRUCO DE DIMENSIONES: Calculamos la altura exacta sin scroll
+                # (Aprox 36px por fila + 38px del encabezado + 10px de margen)
+                alto_dinamico = int((len(df_base) * 36) + 48)
+                # -------------------------------------------------------------
+                
+                # 5. Dibujamos el editor aplicando altura exacta y compactando columnas
                 df_editado = st.data_editor(
                     df_base,
                     hide_index=True,
                     use_container_width=True,
-                    disabled=['CT', 'Folios', 'Prod. Esperada'], # Bloqueamos las que no deben sobreescribir
-                    key=llave_editor
+                    height=alto_dinamico, # 👈 Adiós scroll vertical
+                    disabled=['CT', 'Folios', 'Prod. Esperada'], 
+                    key=llave_editor,
+                    column_config={       # 👈 Adiós scroll horizontal
+                        "CT": st.column_config.TextColumn(width="medium"),
+                        "Folios": st.column_config.NumberColumn(width="small"),
+                        "SIAC": st.column_config.NumberColumn(width="small"),
+                        "Tecnicos": st.column_config.NumberColumn(width="small"),
+                        "Comp. x Tec.": st.column_config.NumberColumn(width="small"),
+                        "Prod. Esperada": st.column_config.NumberColumn(width="small")
+                    }
                 )
                 
                 # 6. Botón de Descarga del Cierre Diario
-                # Agregamos Fecha y Región SOLO para el archivo descargable (invisible en pantalla)
                 df_descarga = df_editado.copy()
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
                 df_descarga['Region'] = region_seleccionada

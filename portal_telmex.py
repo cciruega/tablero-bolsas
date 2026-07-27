@@ -71,10 +71,15 @@ st.markdown("""
         }
         [data-testid="stTable"] table { width: auto !important; }
         
-        /* 👇 NUEVO: CENTRAR TÍTULOS DE LA TABLA ESTÁTICA */
-        [data-testid="stTable"] th {
+        /* 👇 SOLO centrar los encabezados superiores (Columnas) */
+        [data-testid="stTable"] thead th {
             text-align: center !important;
             vertical-align: middle !important;
+        }
+
+        /* 👇 Mantener a la izquierda la columna de CTs (Índices) */
+        [data-testid="stTable"] tbody th {
+            text-align: left !important;
         }
 
         [data-testid="stTable"] th, [data-testid="stTable"] td {
@@ -88,18 +93,10 @@ st.markdown("""
                 font-size: 10px !important; 
                 padding: 4px 6px !important; 
             }
-            [data-testid="stMarkdownContainer"] h3 {
-                font-size: 1.1rem !important;
-            }
-            .stButton > button {
-                padding: 2px 10px !important;
-                font-size: 12px !important;
-            }
         }
     </style>
 """, unsafe_allow_html=True)
 st.divider()
-
 # ---------------------------------------------------------
 # ☁️ LÓGICA DE DETECCIÓN AUTOMÁTICA (CLARO DRIVE)
 # ---------------------------------------------------------
@@ -388,14 +385,12 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            # --- ESTRUCTURA A DOS COLUMNAS (Proporción más equilibrada) ---
             col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
             
-            # Procesamos la tabla izquierda
+            # Procesamos la tabla izquierda y generamos los subtotales
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
             cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
             
-            # 💡 TRUCO: Guardamos la tabla ya con subtotales en una variable para medirla después
             df_con_subtotales = aplicar_subtotales(td_b5_ps[cols])
             
             with col_t3_izq:
@@ -403,15 +398,13 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
             with col_t3_der:
-                # 1. Extraemos los CTs de la tabla original
-                df_captura = td_b5_ps.copy()
-                if 'Total' in df_captura.index.get_level_values(0):
-                    df_captura = df_captura.drop('Total', level=0)
-                df_captura = df_captura.reset_index()
+                # 1. Extraemos las filas exactas (Ya incluye Subtotales y Gran Total)
+                df_captura = df_con_subtotales.copy().reset_index()
                 
                 # 2. Armamos el esqueleto base
                 df_base = pd.DataFrame({
-                    'CT': df_captura['CT'],
+                    'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
+                    'CT': df_captura['CT'] if 'CT' in df_captura.columns else df_captura.iloc[:, 1],
                     'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
                     'SIAC': 0,
                     'Tecs': 0,
@@ -419,26 +412,53 @@ if archivo_a_procesar is not None:
                     'Prod. Esp': 0.0
                 })
                 
-                # 3. Leemos los cambios del usuario en memoria
+                # Embellecemos el texto del Gran Total
+                df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
+                
+                # 3. Leemos los cambios del usuario
                 llave_editor = f"editor_t3_{region_seleccionada}"
                 if llave_editor in st.session_state:
                     cambios = st.session_state[llave_editor].get("edited_rows", {})
                     for fila_idx, mods in cambios.items():
                         for col, val in mods.items():
-                            df_base.at[fila_idx, col] = val
+                            if col in df_base.columns:
+                                df_base.at[fila_idx, col] = val
                 
-                # 4. Hacemos la multiplicación de la nueva columna
+                # 4. Multiplicación base (CTs)
                 df_base['Prod. Esp'] = df_base['Tecs'] * df_base['Comp/Tec']
                 
-                # -------------------------------------------------------------
-                # 📏 AJUSTE DE ALTURA: Usamos el largo de la tabla IZQUIERDA
-                # Esto obliga a la tabla derecha a estirarse para rellenar el hueco blanco.
-                alto_dinamico = int((len(df_con_subtotales) * 36) + 43)
-                # -------------------------------------------------------------
+                # 🔄 5. MOTOR DE AUTO-SUMAS PARA SUBTOTALES Y GRAN TOTAL
+                mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
                 
-                # 5. Dibujamos el editor interactivo
+                for area in df_base['AREA'].unique():
+                    if str(area).lower() == 'total':
+                        continue
+                    
+                    mask_area_cts = mask_cts & (df_base['AREA'] == area)
+                    mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
+                    
+                    if mask_sub.any():
+                        df_base.loc[mask_sub, 'SIAC'] = df_base.loc[mask_area_cts, 'SIAC'].sum()
+                        df_base.loc[mask_sub, 'Tecs'] = df_base.loc[mask_area_cts, 'Tecs'].sum()
+                        df_base.loc[mask_sub, 'Prod. Esp'] = df_base.loc[mask_area_cts, 'Prod. Esp'].sum()
+                        df_base.loc[mask_sub, 'Comp/Tec'] = 0 # En los totales no suma el compromiso unitario
+                
+                mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
+                if mask_gran.any():
+                    df_base.loc[mask_gran, 'SIAC'] = df_base.loc[mask_cts, 'SIAC'].sum()
+                    df_base.loc[mask_gran, 'Tecs'] = df_base.loc[mask_cts, 'Tecs'].sum()
+                    df_base.loc[mask_gran, 'Prod. Esp'] = df_base.loc[mask_cts, 'Prod. Esp'].sum()
+                    df_base.loc[mask_gran, 'Comp/Tec'] = 0
+                
+                # 6. Ocultamos la columna temporal AREA para limpiar la vista
+                df_mostrar = df_base.drop(columns=['AREA'])
+                
+                # Altura milimétricamente exacta a la tabla 1
+                alto_dinamico = int((len(df_mostrar) * 36) + 43)
+                
+                # Dibujamos
                 df_editado = st.data_editor(
-                    df_base,
+                    df_mostrar,
                     hide_index=True,
                     use_container_width=True,
                     height=alto_dinamico,
@@ -446,15 +466,15 @@ if archivo_a_procesar is not None:
                     key=llave_editor,
                     column_config={
                         "CT": st.column_config.TextColumn(width="medium"),
-                        "Folios": st.column_config.NumberColumn(width=50), # 👈 Forzado a 50 pixeles exactos
-                        "SIAC": st.column_config.NumberColumn(width=60),   # Ajustado fino
-                        "Tecs": st.column_config.NumberColumn(width=60),   # Ajustado fino
+                        "Folios": st.column_config.NumberColumn(width=50),
+                        "SIAC": st.column_config.NumberColumn(width=60),
+                        "Tecs": st.column_config.NumberColumn(width=60),
                         "Comp/Tec": st.column_config.NumberColumn(width=80),
                         "Prod. Esp": st.column_config.NumberColumn(width=80)
                     }
                 )
                 
-                # 6. Botón de Descarga
+                # 7. Botón de Descarga
                 df_descarga = df_editado.copy()
                 df_descarga = df_descarga.rename(columns={'Tecs': 'Tecnicos', 'Comp/Tec': 'Comp. x Tec.', 'Prod. Esp': 'Prod. Esperada'})
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")

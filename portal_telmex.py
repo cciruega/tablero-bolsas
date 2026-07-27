@@ -460,13 +460,13 @@ if archivo_a_procesar is not None:
                 def pintar_totales(row):
                     ct_val = str(row['CT'])
                     if 'TOTAL ÁREA' in ct_val:
-                        return ['background-color: #ADD8E6; font-weight: bold; color: black;'] * len(row)
+                        return ['background-color: #ADD8E6; font-weight: normal; color: black;'] * len(row)
                     return [''] * len(row)
                 
                 df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
 
                 # Altura ajustada
-                alto_dinamico = int((len(df_mostrar) * 36) + 78) 
+                alto_dinamico = int((len(df_mostrar) * 37) + 78) 
                 
                 # Dibujamos
                 df_editado = st.data_editor(

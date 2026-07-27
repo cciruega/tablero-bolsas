@@ -382,8 +382,8 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            # --- ESTRUCTURA A DOS COLUMNAS (Ajustamos proporción para dar más ancho) ---
-            col_t3_izq, col_t3_der = st.columns([1.3, 1]) 
+            # --- ESTRUCTURA A DOS COLUMNAS (Ajustamos proporción para dar más espacio a la captura) ---
+            col_t3_izq, col_t3_der = st.columns([1.1, 1]) 
             
             # Procesamos la tabla izquierda primero para extraer los CTs
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
@@ -401,13 +401,14 @@ if archivo_a_procesar is not None:
                     df_captura = df_captura.drop('Total', level=0)
                 df_captura = df_captura.reset_index()
                 
-                # 2. Armamos el esqueleto base
+                # 2. Armamos el esqueleto base con NOMBRES CORTOS VISUALES (Evita scroll y cortes)
                 df_base = pd.DataFrame({
                     'CT': df_captura['CT'],
                     'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
                     'SIAC': 0,
-                    'Tecnicos': 0,
-                    'Comp. x Tec.': 0.0
+                    'Tecs': 0,        # Nombre compacto
+                    'Comp/Tec': 0.0,  # Nombre compacto
+                    'Prod. Esp': 0.0  # Nombre compacto
                 })
                 
                 # 3. Leemos los cambios del usuario en memoria
@@ -419,34 +420,39 @@ if archivo_a_procesar is not None:
                             df_base.at[fila_idx, col] = val
                 
                 # 4. Hacemos la multiplicación de la nueva columna
-                df_base['Prod. Esperada'] = df_base['Tecnicos'] * df_base['Comp. x Tec.']
+                df_base['Prod. Esp'] = df_base['Tecs'] * df_base['Comp/Tec']
                 
-                # -------------------------------------------------------------
-                # 📏 TRUCO DE DIMENSIONES: Calculamos la altura exacta sin scroll
-                # (Aprox 36px por fila + 38px del encabezado + 10px de margen)
-                alto_dinamico = int((len(df_base) * 36) + 48)
-                # -------------------------------------------------------------
+                # 5. Calculamos la altura exacta sin scroll vertical
+                alto_dinamico = int((len(df_base) * 36) + 43)
                 
-                # 5. Dibujamos el editor aplicando altura exacta y compactando columnas
+                # Dibujamos el editor interactivo
                 df_editado = st.data_editor(
                     df_base,
                     hide_index=True,
                     use_container_width=True,
-                    height=alto_dinamico, # 👈 Adiós scroll vertical
-                    disabled=['CT', 'Folios', 'Prod. Esperada'], 
+                    height=alto_dinamico,
+                    disabled=['CT', 'Folios', 'Prod. Esp'], 
                     key=llave_editor,
-                    column_config={       # 👈 Adiós scroll horizontal
+                    column_config={
                         "CT": st.column_config.TextColumn(width="medium"),
                         "Folios": st.column_config.NumberColumn(width="small"),
                         "SIAC": st.column_config.NumberColumn(width="small"),
-                        "Tecnicos": st.column_config.NumberColumn(width="small"),
-                        "Comp. x Tec.": st.column_config.NumberColumn(width="small"),
-                        "Prod. Esperada": st.column_config.NumberColumn(width="small")
+                        "Tecs": st.column_config.NumberColumn(width="small"),
+                        "Comp/Tec": st.column_config.NumberColumn(width="small"),
+                        "Prod. Esp": st.column_config.NumberColumn(width="small")
                     }
                 )
                 
                 # 6. Botón de Descarga del Cierre Diario
                 df_descarga = df_editado.copy()
+                
+                # 🔄 RENOMBRAMOS A LOS TÍTULOS COMPLETOS PARA EL ARCHIVO EXCEL/CSV
+                df_descarga = df_descarga.rename(columns={
+                    'Tecs': 'Tecnicos',
+                    'Comp/Tec': 'Comp. x Tec.',
+                    'Prod. Esp': 'Prod. Esperada'
+                })
+                
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
                 df_descarga['Region'] = region_seleccionada
                 

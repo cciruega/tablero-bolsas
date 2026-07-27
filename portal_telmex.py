@@ -382,59 +382,61 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            # --- NUEVA ESTRUCTURA A DOS COLUMNAS ---
-            # Le damos 60% de espacio a la tabla original y 40% a la captura
+            # --- ESTRUCTURA A DOS COLUMNAS ALINEADAS ---
             col_t3_izq, col_t3_der = st.columns([1.5, 1]) 
             
-            # LADO IZQUIERDO: La Tabla Original
+            # Procesamos la tabla izquierda primero para extraer los CTs
+            td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+            
             with col_t3_izq:
-                td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                # Dibujamos tabla izquierda al ras (Sin textos arriba para que no haya desfase)
                 cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
                 st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
-            # LADO DERECHO: El panel de Captura Operativa
             with col_t3_der:
-                st.markdown("### 📝 Captura de Asistencia")
-                
-                # 1. Extraemos los CTs de la tabla original para que coincidan exacto
+                # 1. Extraemos los CTs de la tabla izquierda
                 df_captura = td_b5_ps.copy()
                 if 'Total' in df_captura.index.get_level_values(0):
                     df_captura = df_captura.drop('Total', level=0)
-                
                 df_captura = df_captura.reset_index()
                 
-                # 2. Armamos el esqueleto editable con ceros por defecto
-                df_editor = pd.DataFrame({
+                # 2. Armamos el esqueleto base
+                df_base = pd.DataFrame({
                     'CT': df_captura['CT'],
                     'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
                     'SIAC': 0,
                     'Tecnicos': 0,
-                    'Comp. x Tec.': 0.0 # Con decimales por si acaso
+                    'Comp. x Tec.': 0.0
                 })
                 
-                st.info("✏️ Captura los datos (La Prod. Esperada se calculará abajo)")
+                # 3. TRUCO DE CÁLCULO EN VIVO: Leemos los cambios del usuario en memoria
+                llave_editor = f"editor_t3_{region_seleccionada}"
+                if llave_editor in st.session_state:
+                    cambios = st.session_state[llave_editor].get("edited_rows", {})
+                    for fila_idx, mods in cambios.items():
+                        for col, val in mods.items():
+                            df_base.at[fila_idx, col] = val
                 
-                # 3. La magia del Editor Interactivo de Streamlit
+                # 4. Hacemos la multiplicación de la nueva columna
+                df_base['Prod. Esperada'] = df_base['Tecnicos'] * df_base['Comp. x Tec.']
+                
+                # 5. Dibujamos el editor interactivo (Al no poner textos, se alinea perfectamente con la tabla izquierda)
                 df_editado = st.data_editor(
-                    df_editor,
+                    df_base,
                     hide_index=True,
                     use_container_width=True,
-                    disabled=['CT', 'Folios'], # Bloqueamos CT y Folios para que no los borren
-                    key='editor_t3'
+                    disabled=['CT', 'Folios', 'Prod. Esperada'], # Bloqueamos las que no deben sobreescribir
+                    key=llave_editor
                 )
                 
-                # 4. Cálculo Automático y adición de metadatos (Fecha y Región)
-                df_editado['Prod. Esperada'] = df_editado['Tecnicos'] * df_editado['Comp. x Tec.']
-                df_editado['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
-                df_editado['Region'] = region_seleccionada
+                # 6. Botón de Descarga del Cierre Diario
+                # Agregamos Fecha y Región SOLO para el archivo descargable (invisible en pantalla)
+                df_descarga = df_editado.copy()
+                df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
+                df_descarga['Region'] = region_seleccionada
                 
-                # 5. Mostramos la fila de resultados ya calculada
-                st.markdown("**📊 Vista Previa con Productividad:**")
-                st.dataframe(df_editado[['CT', 'SIAC', 'Tecnicos', 'Comp. x Tec.', 'Prod. Esperada']], hide_index=True, use_container_width=True)
-                
-                # 6. Botón de Descarga del Cierre
-                csv_cierre = df_editado.to_csv(index=False).encode('utf-8')
+                csv_cierre = df_descarga.to_csv(index=False).encode('utf-8')
                 st.download_button(
                     label="💾 Descargar Cierre Diario",
                     data=csv_cierre,
@@ -443,7 +445,7 @@ if archivo_a_procesar is not None:
                     key='btn_cierre_t3'
                 )
         else: 
-            st.info("No hay datos.")
+            st.info("No hay datos para la Bolsa 5 - Solo PS.")
         
         st.divider()
 

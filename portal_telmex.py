@@ -8,6 +8,7 @@ import datetime
 import requests
 import zipfile
 import io
+from streamlit_gsheets import GSheetsConnection
 
 st.set_page_config(page_title="Tablero Operativo Bolsas", layout="wide")
 
@@ -387,10 +388,9 @@ if archivo_a_procesar is not None:
             
             col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
             
-            # Procesamos la tabla izquierda y generamos los subtotales
+            # Procesamos tabla izquierda
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
             cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
-            
             df_con_subtotales = aplicar_subtotales(td_b5_ps[cols])
             
             with col_t3_izq:
@@ -398,99 +398,100 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
             with col_t3_der:
-                # Espaciador para alinear el título con la tabla izquierda
                 st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
                 
-                # 1. Extraemos las filas exactas
-                df_captura = df_con_subtotales.copy().reset_index()
+                # 1. 🌐 CONECTAR A GOOGLE SHEETS
+                url_sheet = "https://docs.google.com/spreadsheets/d/1cYHq6afeVavGNGSRPC3lPxzLN5E5wIqFFa2BSp0nxZY/edit?gid=0#gid=0"
+                try:
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    df_historico = conn.read(spreadsheet=url_sheet, usecols=[0,1,2,3,4,5])
+                except Exception as e:
+                    df_historico = pd.DataFrame()
+                    st.warning("⚠️ Modo sin conexión a Google Sheets. Faltan configurar las claves secretas.")
                 
-                # 2. Armamos el esqueleto base
+                # 2. BASE DE CTS (Tomados directo de tu Excel de Claro Drive)
+                df_captura = df_con_subtotales.copy().reset_index()
                 df_base = pd.DataFrame({
                     'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
                     'CT': df_captura['CT'] if 'CT' in df_captura.columns else df_captura.iloc[:, 1],
-                    'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0,
-                    'SIAC': 0,
-                    'Tecs': 0,
-                    'Comp/Tec': 0.0,
-                    'Prod. Esp': 0
+                    'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0
                 })
-                
-                # Embellecemos el texto del Gran Total
                 df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
                 
-                # 3. Leemos los cambios del usuario asegurando persistencia de memoria
-                llave_editor = f"editor_t3_{region_seleccionada}"
-                if llave_editor in st.session_state:
-                    cambios = st.session_state[llave_editor].get("edited_rows", {})
-                    for fila_idx, mods in cambios.items():
-                        for col, val in mods.items():
-                            if col in df_base.columns:
-                                df_base.at[fila_idx, col] = val
+                # 3. MERGE: Combinar los CTs de hoy con la información ya capturada en Google Sheets
+                if not df_historico.empty and 'CT' in df_historico.columns:
+                    df_merge = pd.merge(df_base, df_historico[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
+                else:
+                    df_merge = df_base.copy()
+                    df_merge['SIAC'] = 0
+                    df_merge['Tecs'] = 0
+                    df_merge['Comp'] = 0.0
+                    df_merge['Prod. Esp'] = 0
                 
-                # 4. Multiplicación base SIN DECIMALES
-                df_base['Prod. Esp'] = (df_base['Tecs'] * df_base['Comp/Tec']).round().astype(int)
+                # Rellenar vacíos
+                df_merge['SIAC'] = df_merge['SIAC'].fillna(0).astype(int)
+                df_merge['Tecs'] = df_merge['Tecs'].fillna(0).astype(int)
+                df_merge['Comp'] = df_merge['Comp'].fillna(0.0)
+                df_merge['Prod. Esp'] = df_merge['Prod. Esp'].fillna(0).astype(int)
                 
-                # 5. Motor de Auto-sumas para Subtotales y Gran Total
-                mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
+                df_mostrar = df_merge.drop(columns=['AREA'])
                 
-                for area in df_base['AREA'].unique():
-                    if str(area).lower() == 'total':
-                        continue
-                    
-                    mask_area_cts = mask_cts & (df_base['AREA'] == area)
-                    mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
-                    
-                    if mask_sub.any():
-                        df_base.loc[mask_sub, 'SIAC'] = df_base.loc[mask_area_cts, 'SIAC'].sum()
-                        df_base.loc[mask_sub, 'Tecs'] = df_base.loc[mask_area_cts, 'Tecs'].sum()
-                        df_base.loc[mask_sub, 'Prod. Esp'] = df_base.loc[mask_area_cts, 'Prod. Esp'].sum()
-                        df_base.loc[mask_sub, 'Comp/Tec'] = 0 
+                # Aplicamos de nuevo el estilo
+                def pintar_totales(row):
+                    if 'TOTAL ÁREA' in str(row['CT']):
+                        return ['background-color: #ADD8E6; font-weight: bold; color: black;'] * len(row)
+                    return [''] * len(row)
                 
-                mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
-                if mask_gran.any():
-                    df_base.loc[mask_gran, 'SIAC'] = df_base.loc[mask_cts, 'SIAC'].sum()
-                    df_base.loc[mask_gran, 'Tecs'] = df_base.loc[mask_cts, 'Tecs'].sum()
-                    df_base.loc[mask_gran, 'Prod. Esp'] = df_base.loc[mask_cts, 'Prod. Esp'].sum()
-                    df_base.loc[mask_gran, 'Comp/Tec'] = 0
-                
-                # 6. Ocultamos la columna temporal AREA
-                df_mostrar = df_base.drop(columns=['AREA'])
-                
-                # Altura ajustada
+                df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
                 alto_dinamico = int((len(df_mostrar) * 36) + 78) 
                 
-                # 7. Dibujamos el editor usando un DATAFRAME PURO (Se elimina el Styler para evitar que se resetee)
+                # 4. MOSTRAR EDITOR (Ya no se borrará porque delegamos el cálculo al botón de guardado)
                 df_editado = st.data_editor(
-                    df_mostrar, 
+                    df_estilizado, 
                     hide_index=True,
                     use_container_width=True,
                     height=alto_dinamico,
                     disabled=['CT', 'Folios', 'Prod. Esp'], 
-                    key=llave_editor,
                     column_config={
                         "CT": st.column_config.TextColumn("CT\n", width="medium"),
                         "Folios": st.column_config.NumberColumn("Folios\n", width=50),
                         "SIAC": st.column_config.NumberColumn("SIAC\n", width=60),
                         "Tecs": st.column_config.NumberColumn("Tecs\n", width=60),
-                        "Comp/Tec": st.column_config.NumberColumn("Comp/Tec\n", width=80),
+                        "Comp": st.column_config.NumberColumn("Comp\n", width=80),
                         "Prod. Esp": st.column_config.NumberColumn("Prod. Esp\n", width=80, format="%d")
                     }
                 )
                 
-                # 8. Botón de Descarga
-                df_descarga = df_editado.copy()
-                df_descarga = df_descarga.rename(columns={'Tecs': 'Tecnicos', 'Comp/Tec': 'Comp. x Tec.', 'Prod. Esp': 'Prod. Esperada'})
-                df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")
-                df_descarga['Region'] = region_seleccionada
-                
-                csv_cierre = df_descarga.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    label="💾 Descargar Cierre Diario",
-                    data=csv_cierre,
-                    file_name=f"cierre_diario_asistencia_{region_seleccionada.lower()}.csv",
-                    mime='text/csv',
-                    key='btn_cierre_t3'
-                )
+                # 5. BOTÓN MAESTRO: Calcula, Suma y Sincroniza con Google Sheets
+                if st.button("☁️ Guardar Cambios en Nube", type="primary"):
+                    df_guardar = df_editado.copy()
+                    
+                    # Calcular Productividad Unitaria
+                    df_guardar['Prod. Esp'] = (df_guardar['Tecs'] * df_guardar['Comp']).round().astype(int)
+                    
+                    # Motor de Auto-sumas para Subtotales
+                    mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
+                    for area in df_base['AREA'].unique():
+                        if str(area).lower() != 'total':
+                            mask_area_cts = mask_cts & (df_base['AREA'] == area)
+                            mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
+                            if mask_sub.any():
+                                df_guardar.loc[mask_sub, 'SIAC'] = df_guardar.loc[mask_area_cts, 'SIAC'].sum()
+                                df_guardar.loc[mask_sub, 'Tecs'] = df_guardar.loc[mask_area_cts, 'Tecs'].sum()
+                                df_guardar.loc[mask_sub, 'Prod. Esp'] = df_guardar.loc[mask_area_cts, 'Prod. Esp'].sum()
+                                df_guardar.loc[mask_sub, 'Comp'] = 0
+                                
+                    mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
+                    if mask_gran.any():
+                        df_guardar.loc[mask_gran, 'SIAC'] = df_guardar.loc[mask_cts, 'SIAC'].sum()
+                        df_guardar.loc[mask_gran, 'Tecs'] = df_guardar.loc[mask_cts, 'Tecs'].sum()
+                        df_guardar.loc[mask_gran, 'Prod. Esp'] = df_guardar.loc[mask_cts, 'Prod. Esp'].sum()
+                        df_guardar.loc[mask_gran, 'Comp'] = 0
+                    
+                    # Enviar a Google Sheets
+                    conn.update(spreadsheet=url_sheet, worksheet="Hoja 1", data=df_guardar[['CT', 'Folios', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']])
+                    st.success("¡Base de datos actualizada! Recargando...")
+                    st.rerun() # Recargamos para que el portal lea las nuevas sumas directo de Google
         else: 
             st.info("No hay datos para la Bolsa 5 - Solo PS.")
         

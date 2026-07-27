@@ -398,7 +398,7 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
             with col_t3_der:
-                # 🛠️ TRUCO DE ALINEACIÓN: Espaciador para igualar la altura del encabezado izquierdo
+                # Espaciador para alinear el título con la tabla izquierda
                 st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
                 
                 # 1. Extraemos las filas exactas
@@ -418,7 +418,7 @@ if archivo_a_procesar is not None:
                 # Embellecemos el texto del Gran Total
                 df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
                 
-                # 3. Leemos los cambios del usuario
+                # 3. Leemos los cambios del usuario asegurando persistencia de memoria
                 llave_editor = f"editor_t3_{region_seleccionada}"
                 if llave_editor in st.session_state:
                     cambios = st.session_state[llave_editor].get("edited_rows", {})
@@ -427,10 +427,10 @@ if archivo_a_procesar is not None:
                             if col in df_base.columns:
                                 df_base.at[fila_idx, col] = val
                 
-                # 4. Multiplicación base SIN DECIMALES (.round().astype(int))
+                # 4. Multiplicación base SIN DECIMALES
                 df_base['Prod. Esp'] = (df_base['Tecs'] * df_base['Comp/Tec']).round().astype(int)
                 
-                # 5. Motor de Auto-sumas
+                # 5. Motor de Auto-sumas para Subtotales y Gran Total
                 mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
                 
                 for area in df_base['AREA'].unique():
@@ -456,22 +456,12 @@ if archivo_a_procesar is not None:
                 # 6. Ocultamos la columna temporal AREA
                 df_mostrar = df_base.drop(columns=['AREA'])
                 
-                # 🎨 ESTILO EXACTO: Azul Claro (#ADD8E6) solo para 'TOTAL ÁREA', excluyendo 'GRAN TOTAL'
-                def pintar_totales(row):
-                    ct_val = str(row['CT'])
-                    if 'TOTAL ÁREA' in ct_val:
-                        return ['background-color: #ADD8E6; font-weight: normal; color: black;'] * len(row)
-                    return [''] * len(row)
-                
-                df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
-
                 # Altura ajustada
-                alto_dinamico = int((len(df_mostrar) * 37) + 78) 
+                alto_dinamico = int((len(df_mostrar) * 36) + 78) 
                 
-                # Dibujamos
+                # 7. Dibujamos el editor usando un DATAFRAME PURO (Se elimina el Styler para evitar que se resetee)
                 df_editado = st.data_editor(
-                    df_estilizado, 
-     
+                    df_mostrar, 
                     hide_index=True,
                     use_container_width=True,
                     height=alto_dinamico,
@@ -487,7 +477,7 @@ if archivo_a_procesar is not None:
                     }
                 )
                 
-                # 7. Botón de Descarga
+                # 8. Botón de Descarga
                 df_descarga = df_editado.copy()
                 df_descarga = df_descarga.rename(columns={'Tecs': 'Tecnicos', 'Comp/Tec': 'Comp. x Tec.', 'Prod. Esp': 'Prod. Esperada'})
                 df_descarga['Fecha'] = datetime.datetime.now().strftime("%d/%m/%Y")

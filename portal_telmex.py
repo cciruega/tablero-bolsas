@@ -386,150 +386,160 @@ if archivo_a_procesar is not None:
         df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
         if not df_b5_ps.empty:
             
-            col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
+            # 🔘 NUEVO: Interruptor para ocultar/mostrar la captura
+            mostrar_captura = st.toggle("📝 Compromiso Produccion", value=False)
             
-            # Procesamos tabla izquierda
+            # Procesamos tabla izquierda (Esto se hace siempre para mostrar los datos base)
             td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
             cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
             df_con_subtotales = aplicar_subtotales(td_b5_ps[cols])
+            
+            # Lógica de columnas dinámicas
+            if mostrar_captura:
+                # Si está prendido, partimos la pantalla en dos
+                col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
+            else:
+                # Si está apagado, la tabla izquierda usa todo su espacio natural
+                col_t3_izq = st.container()
             
             with col_t3_izq:
                 st.table(estilo_resaltado(df_con_subtotales))
                 generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
             
-            with col_t3_der:
-                st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
-                
-                # 1. 🌐 CONECTAR A GOOGLE SHEETS
-                url_sheet = "https://docs.google.com/spreadsheets/d/1cYHq6afeVavGNGSRPC3lPxzLN5E5wIqFFa2BSp0nxZY/edit?gid=0#gid=0"
-                try:
-                    conn = st.connection("gsheets", type=GSheetsConnection)
-                    df_historico = conn.read(spreadsheet=url_sheet, worksheet=region_seleccionada, ttl=0, usecols=[0,1,2,3,4,5])
-                except Exception as e:
-                    df_historico = pd.DataFrame()
-                
-                # 2. BASE DE CTS
-                df_captura = df_con_subtotales.copy().reset_index()
-                df_base = pd.DataFrame({
-                    'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
-                    'CT': df_captura['CT'] if 'CT' in df_captura.columns else df_captura.iloc[:, 1],
-                    'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0
-                })
-                df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
-                
-                # 3. MERGE CORREGIDO: Evitar triplicidad filtrando los totales históricos
-                if not df_historico.empty and 'CT' in df_historico.columns:
-                    # Filtramos las filas que digan "TOTAL" del Sheets para no duplicar el cruce
-                    df_hist_limpio = df_historico[~df_historico['CT'].astype(str).str.contains('TOTAL', case=False, na=False)].drop_duplicates(subset=['CT'])
-                    df_merge = pd.merge(df_base, df_hist_limpio[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
-                else:
-                    df_merge = df_base.copy()
-                    df_merge['SIAC'] = 0
-                    df_merge['Tecs'] = 0
-                    df_merge['Comp'] = 0.0
-                    df_merge['Prod. Esp'] = 0
-                
-                df_merge['SIAC'] = df_merge['SIAC'].fillna(0).astype(int)
-                df_merge['Tecs'] = df_merge['Tecs'].fillna(0).astype(int)
-                df_merge['Comp'] = df_merge['Comp'].fillna(0.0)
-                df_merge['Prod. Esp'] = df_merge['Prod. Esp'].fillna(0).astype(int)
-                
-                # 🔄 AUTO-SUMAS INICIALES (Para que no salgan en ceros al cargar la página)
-                mask_cts_ini = (~df_merge['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_merge['AREA'].astype(str).str.lower() != 'total')
-                for area in df_merge['AREA'].unique():
-                    if str(area).lower() != 'total':
-                        mask_area_cts_ini = mask_cts_ini & (df_merge['AREA'] == area)
-                        mask_sub_ini = (df_merge['AREA'] == area) & (df_merge['CT'].astype(str).str.contains('TOTAL', case=False))
-                        if mask_sub_ini.any():
-                            df_merge.loc[mask_sub_ini, 'SIAC'] = df_merge.loc[mask_area_cts_ini, 'SIAC'].sum()
-                            df_merge.loc[mask_sub_ini, 'Tecs'] = df_merge.loc[mask_area_cts_ini, 'Tecs'].sum()
-                            df_merge.loc[mask_sub_ini, 'Prod. Esp'] = df_merge.loc[mask_area_cts_ini, 'Prod. Esp'].sum()
-                            df_merge.loc[mask_sub_ini, 'Comp'] = 0
-                            
-                mask_gran_ini = df_merge['AREA'].astype(str).str.lower() == 'total'
-                if mask_gran_ini.any():
-                    df_merge.loc[mask_gran_ini, 'SIAC'] = df_merge.loc[mask_cts_ini, 'SIAC'].sum()
-                    df_merge.loc[mask_gran_ini, 'Tecs'] = df_merge.loc[mask_cts_ini, 'Tecs'].sum()
-                    df_merge.loc[mask_gran_ini, 'Prod. Esp'] = df_merge.loc[mask_cts_ini, 'Prod. Esp'].sum()
-                    df_merge.loc[mask_gran_ini, 'Comp'] = 0
-
-                df_mostrar = df_merge.drop(columns=['AREA'])
-                
-                def pintar_totales(row):
-                    if 'TOTAL ÁREA' in str(row['CT']):
-                        return ['background-color: #ADD8E6; font-weight: bold; color: black;'] * len(row)
-                    return [''] * len(row)
-                
-                df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
-                alto_dinamico = int((len(df_mostrar) * 36) + 78) 
-                
-                # 4. MOSTRAR EDITOR
-                df_editado = st.data_editor(
-                    df_estilizado, 
-                    hide_index=True,
-                    use_container_width=True,
-                    height=alto_dinamico,
-                    disabled=['CT', 'Folios', 'Prod. Esp'], 
-                    column_config={
-                        "CT": st.column_config.TextColumn("CT\n", width="medium"),
-                        "Folios": st.column_config.NumberColumn("Folios\n", width=50),
-                        "SIAC": st.column_config.NumberColumn("SIAC\n", width=60),
-                        "Tecs": st.column_config.NumberColumn("Tecs\n", width=60),
-                        "Comp": st.column_config.NumberColumn("Comp\n", width=80),
-                        "Prod. Esp": st.column_config.NumberColumn("Prod. Esp\n", width=80, format="%d")
-                    }
-                )
-                
-                # 5. BOTÓN MAESTRO: Calcula y Direcciona al Acumulado Correcto
-                if st.button(f"☁️ Guardar y Acumular ({region_seleccionada})", type="primary"):
-                    df_guardar = df_editado.copy()
+            # ⬇️ Todo el bloque de Google Sheets se ejecuta SOLO si el switch está prendido
+            if mostrar_captura:
+                with col_t3_der:
+                    st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
                     
-                    df_guardar['Prod. Esp'] = (df_guardar['Tecs'] * df_guardar['Comp']).round().astype(int)
-                    mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
-                    
-                    for area in df_base['AREA'].unique():
-                        if str(area).lower() != 'total':
-                            mask_area_cts = mask_cts & (df_base['AREA'] == area)
-                            mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
-                            if mask_sub.any():
-                                df_guardar.loc[mask_sub, 'SIAC'] = df_guardar.loc[mask_area_cts, 'SIAC'].sum()
-                                df_guardar.loc[mask_sub, 'Tecs'] = df_guardar.loc[mask_area_cts, 'Tecs'].sum()
-                                df_guardar.loc[mask_sub, 'Prod. Esp'] = df_guardar.loc[mask_area_cts, 'Prod. Esp'].sum()
-                                df_guardar.loc[mask_sub, 'Comp'] = 0
-                                
-                    mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
-                    if mask_gran.any():
-                        df_guardar.loc[mask_gran, 'SIAC'] = df_guardar.loc[mask_cts, 'SIAC'].sum()
-                        df_guardar.loc[mask_gran, 'Tecs'] = df_guardar.loc[mask_cts, 'Tecs'].sum()
-                        df_guardar.loc[mask_gran, 'Prod. Esp'] = df_guardar.loc[mask_cts, 'Prod. Esp'].sum()
-                        df_guardar.loc[mask_gran, 'Comp'] = 0
-                    
-                    df_final_region = df_guardar[['CT', 'Folios', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']]
-                    conn.update(spreadsheet=url_sheet, worksheet=region_seleccionada, data=df_final_region)
-                    
-                    # C. LÓGICA DEL ACUMULADO DINÁMICO (AcumuladoM / AcumuladoT)
-                    hoja_acumulado = "AcumuladoM" if "Monterrey" in region_seleccionada else "AcumuladoT"
-                    fecha_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
-                    
-                    df_hist_nuevo = df_final_region.copy()
-                    df_hist_nuevo.insert(0, 'Fecha', fecha_hoy)
-                    df_hist_nuevo.insert(1, 'Region', region_seleccionada)
-                    
+                    # 1. 🌐 CONECTAR A GOOGLE SHEETS
+                    url_sheet = "https://docs.google.com/spreadsheets/d/1cYHq6afeVavGNGSRPC3lPxzLN5E5wIqFFa2BSp0nxZY/edit?gid=0#gid=0"
                     try:
-                        df_acumulado_base = conn.read(spreadsheet=url_sheet, worksheet=hoja_acumulado, ttl=0)
-                        if not df_acumulado_base.empty and 'Fecha' in df_acumulado_base.columns:
-                            mask_duplicados = (df_acumulado_base['Fecha'] == fecha_hoy) & (df_acumulado_base['Region'] == region_seleccionada)
-                            df_acumulado_limpio = df_acumulado_base[~mask_duplicados]
-                        else:
-                            df_acumulado_limpio = pd.DataFrame()
-                    except:
-                        df_acumulado_limpio = pd.DataFrame()
+                        conn = st.connection("gsheets", type=GSheetsConnection)
+                        df_historico = conn.read(spreadsheet=url_sheet, worksheet=region_seleccionada, ttl=0, usecols=[0,1,2,3,4,5])
+                    except Exception as e:
+                        df_historico = pd.DataFrame()
                     
-                    df_final_acumulado = pd.concat([df_acumulado_limpio, df_hist_nuevo], ignore_index=True)
-                    conn.update(spreadsheet=url_sheet, worksheet=hoja_acumulado, data=df_final_acumulado)
+                    # 2. BASE DE CTS
+                    df_captura = df_con_subtotales.copy().reset_index()
+                    df_base = pd.DataFrame({
+                        'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
+                        'CT': df_captura['CT'] if 'CT' in df_captura.columns else df_captura.iloc[:, 1],
+                        'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0
+                    })
+                    df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
+                    
+                    # 3. MERGE CORREGIDO
+                    if not df_historico.empty and 'CT' in df_historico.columns:
+                        df_hist_limpio = df_historico[~df_historico['CT'].astype(str).str.contains('TOTAL', case=False, na=False)].drop_duplicates(subset=['CT'])
+                        df_merge = pd.merge(df_base, df_hist_limpio[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
+                    else:
+                        df_merge = df_base.copy()
+                        df_merge['SIAC'] = 0
+                        df_merge['Tecs'] = 0
+                        df_merge['Comp'] = 0.0
+                        df_merge['Prod. Esp'] = 0
+                    
+                    df_merge['SIAC'] = df_merge['SIAC'].fillna(0).astype(int)
+                    df_merge['Tecs'] = df_merge['Tecs'].fillna(0).astype(int)
+                    df_merge['Comp'] = df_merge['Comp'].fillna(0.0)
+                    df_merge['Prod. Esp'] = df_merge['Prod. Esp'].fillna(0).astype(int)
+                    
+                    # 🔄 AUTO-SUMAS INICIALES
+                    mask_cts_ini = (~df_merge['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_merge['AREA'].astype(str).str.lower() != 'total')
+                    for area in df_merge['AREA'].unique():
+                        if str(area).lower() != 'total':
+                            mask_area_cts_ini = mask_cts_ini & (df_merge['AREA'] == area)
+                            mask_sub_ini = (df_merge['AREA'] == area) & (df_merge['CT'].astype(str).str.contains('TOTAL', case=False))
+                            if mask_sub_ini.any():
+                                df_merge.loc[mask_sub_ini, 'SIAC'] = df_merge.loc[mask_area_cts_ini, 'SIAC'].sum()
+                                df_merge.loc[mask_sub_ini, 'Tecs'] = df_merge.loc[mask_area_cts_ini, 'Tecs'].sum()
+                                df_merge.loc[mask_sub_ini, 'Prod. Esp'] = df_merge.loc[mask_area_cts_ini, 'Prod. Esp'].sum()
+                                df_merge.loc[mask_sub_ini, 'Comp'] = 0
+                                
+                    mask_gran_ini = df_merge['AREA'].astype(str).str.lower() == 'total'
+                    if mask_gran_ini.any():
+                        df_merge.loc[mask_gran_ini, 'SIAC'] = df_merge.loc[mask_cts_ini, 'SIAC'].sum()
+                        df_merge.loc[mask_gran_ini, 'Tecs'] = df_merge.loc[mask_cts_ini, 'Tecs'].sum()
+                        df_merge.loc[mask_gran_ini, 'Prod. Esp'] = df_merge.loc[mask_cts_ini, 'Prod. Esp'].sum()
+                        df_merge.loc[mask_gran_ini, 'Comp'] = 0
 
-                    st.success(f"¡Datos de {region_seleccionada} guardados exitosamente!")
-                    st.rerun() 
+                    df_mostrar = df_merge.drop(columns=['AREA'])
+                    
+                    def pintar_totales(row):
+                        if 'TOTAL ÁREA' in str(row['CT']):
+                            return ['background-color: #ADD8E6; font-weight: bold; color: black;'] * len(row)
+                        return [''] * len(row)
+                    
+                    df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
+                    alto_dinamico = int((len(df_mostrar) * 36) + 78) 
+                    
+                    # 4. MOSTRAR EDITOR
+                    df_editado = st.data_editor(
+                        df_estilizado, 
+                        hide_index=True,
+                        use_container_width=True,
+                        height=alto_dinamico,
+                        disabled=['CT', 'Folios', 'Prod. Esp'], 
+                        column_config={
+                            "CT": st.column_config.TextColumn("CT\n", width="medium"),
+                            "Folios": st.column_config.NumberColumn("Folios\n", width=50),
+                            "SIAC": st.column_config.NumberColumn("SIAC\n", width=60),
+                            "Tecs": st.column_config.NumberColumn("Tecs\n", width=60),
+                            "Comp": st.column_config.NumberColumn("Comp\n", width=80),
+                            "Prod. Esp": st.column_config.NumberColumn("Prod. Esp\n", width=80, format="%d")
+                        }
+                    )
+                    
+                    # 5. BOTÓN MAESTRO: Calcula y Direcciona al Acumulado Correcto
+                    if st.button(f"☁️ Guardar y Acumular ({region_seleccionada})", type="primary"):
+                        df_guardar = df_editado.copy()
+                        
+                        df_guardar['Prod. Esp'] = (df_guardar['Tecs'] * df_guardar['Comp']).round().astype(int)
+                        mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
+                        
+                        for area in df_base['AREA'].unique():
+                            if str(area).lower() != 'total':
+                                mask_area_cts = mask_cts & (df_base['AREA'] == area)
+                                mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
+                                if mask_sub.any():
+                                    df_guardar.loc[mask_sub, 'SIAC'] = df_guardar.loc[mask_area_cts, 'SIAC'].sum()
+                                    df_guardar.loc[mask_sub, 'Tecs'] = df_guardar.loc[mask_area_cts, 'Tecs'].sum()
+                                    df_guardar.loc[mask_sub, 'Prod. Esp'] = df_guardar.loc[mask_area_cts, 'Prod. Esp'].sum()
+                                    df_guardar.loc[mask_sub, 'Comp'] = 0
+                                    
+                        mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
+                        if mask_gran.any():
+                            df_guardar.loc[mask_gran, 'SIAC'] = df_guardar.loc[mask_cts, 'SIAC'].sum()
+                            df_guardar.loc[mask_gran, 'Tecs'] = df_guardar.loc[mask_cts, 'Tecs'].sum()
+                            df_guardar.loc[mask_gran, 'Prod. Esp'] = df_guardar.loc[mask_cts, 'Prod. Esp'].sum()
+                            df_guardar.loc[mask_gran, 'Comp'] = 0
+                        
+                        df_final_region = df_guardar[['CT', 'Folios', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']]
+                        conn.update(spreadsheet=url_sheet, worksheet=region_seleccionada, data=df_final_region)
+                        
+                        # C. LÓGICA DEL ACUMULADO DINÁMICO
+                        hoja_acumulado = "AcumuladoM" if "Monterrey" in region_seleccionada else "AcumuladoT"
+                        fecha_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
+                        
+                        df_hist_nuevo = df_final_region.copy()
+                        df_hist_nuevo.insert(0, 'Fecha', fecha_hoy)
+                        df_hist_nuevo.insert(1, 'Region', region_seleccionada)
+                        
+                        try:
+                            df_acumulado_base = conn.read(spreadsheet=url_sheet, worksheet=hoja_acumulado, ttl=0)
+                            if not df_acumulado_base.empty and 'Fecha' in df_acumulado_base.columns:
+                                mask_duplicados = (df_acumulado_base['Fecha'] == fecha_hoy) & (df_acumulado_base['Region'] == region_seleccionada)
+                                df_acumulado_limpio = df_acumulado_base[~mask_duplicados]
+                            else:
+                                df_acumulado_limpio = pd.DataFrame()
+                        except:
+                            df_acumulado_limpio = pd.DataFrame()
+                        
+                        df_final_acumulado = pd.concat([df_acumulado_limpio, df_hist_nuevo], ignore_index=True)
+                        conn.update(spreadsheet=url_sheet, worksheet=hoja_acumulado, data=df_final_acumulado)
+
+                        st.success(f"¡Datos de {region_seleccionada} guardados exitosamente!")
+                        st.rerun() 
         else: 
             st.info("No hay datos para la Bolsa 5 - Solo PS.")
         

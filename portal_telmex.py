@@ -166,7 +166,7 @@ if usar_manual:
 st.divider()
 
 # ---------------------------------------------------------
-# PROCESAMIENTO
+# PROCESAMIENTO GENERAL
 # ---------------------------------------------------------
 if archivo_a_procesar is not None:
     datos_listos = False
@@ -175,7 +175,7 @@ if archivo_a_procesar is not None:
             df = pd.read_excel(archivo_a_procesar, sheet_name='Detalle')
             df.columns = df.columns.str.strip()
             
-# Limpieza Básica
+            # Limpieza Básica
             columnas_clave = ['ULTIMOS_6_MESES', 'ESTATUS_AGR_N2', 'ESTATUS_AGR_N1', 'ETAPA_OS', 'PORTABILIDAD', 'TIPO_MOVIMIENTO', 'ESTATUS_OS']
             for col in columnas_clave:
                 if col in df.columns:
@@ -187,23 +187,18 @@ if archivo_a_procesar is not None:
 
             # 🧹 2. FILTRO DE CT Y "PASES VIP" PARA BLANCOS
             if 'CT' in df.columns:
-                # Adiós Tulancingo incondicionalmente
                 df = df[df['CT'].astype(str).str.upper() != 'CT TULANCINGO']
                 
-                # Identificamos cuáles CT vienen vacíos o nulos
                 es_ct_vacio = df['CT'].isna() | (df['CT'].astype(str).str.strip() == '')
                 
-                # Identificamos los estatus que tienen permitido no tener CT
                 estatus_n2 = df['ESTATUS_AGR_N2'].astype(str).str.upper()
                 pase_vip = estatus_n2.str.contains('4 EN VALIDACION') | estatus_n2.str.contains('6. PENDIENTE')
                 
-                # REGLA: Conservar los que SÍ tienen CT, o los que NO tienen pero tienen PASE VIP
                 df = df[~es_ct_vacio | (es_ct_vacio & pase_vip)]
                 
-                # Rellenamos los vacíos permitidos con "SIN CT" para que Pandas no choque en otras tablas
                 df['CT'] = df['CT'].fillna('SIN CT')
                 df.loc[df['CT'].astype(str).str.strip() == '', 'CT'] = 'SIN CT'
-
+                
             # =========================================================
             # 🗺️ LÓGICA DE RUTEO POR REGIÓN
             # =========================================================
@@ -220,10 +215,7 @@ if archivo_a_procesar is not None:
                 df = df[df['AREA_CORREGIDA'].isin(["MONTERREY 1", "MONTERREY 2", "MONTERREY 3"])]
                 
             elif region_seleccionada == "Tamaulipas":
-                # Asumimos que la columna 'AREA' tiene la info. Lo pasamos a mayúsculas.
                 df['AREA_TEMP'] = df.get('AREA', '').astype(str).str.strip().str.upper()
-                
-                # Agrupamos Matamoros y Reynosa, y normalizamos variaciones de Ciudad Victoria
                 diccionario_tam = {
                     "MATAMOROS": "MATAMOROS-REYNOSA",
                     "REYNOSA": "MATAMOROS-REYNOSA",
@@ -249,6 +241,168 @@ if archivo_a_procesar is not None:
 
     if datos_listos:
         orden_columnas = ['0 A 2', '3 A 5', '6 A 10', '11 A 20', '21 A 50', '51 A 100', '> 100', 'Sin Rango', 'Total']
+
+        # =========================================================================
+        # 🏗️ DICCIONARIO MAESTRO EXTRACTO DE 'Relacion MTY.xlsx' (242 RUTAS)
+        # =========================================================================
+        diccionario_tiendas = {
+            '95L': 'CAT GES', 'AAB': 'CAT ALL', 'ACE': 'CAT GPE', 'AFO': 'CAT BRI', 
+            'AIG': 'CAT SCA', 'AKA': 'CAT LIN', 'ALL': 'CAT ALL', 'AMB': 'CAT STD', 
+            'ANA': 'CAT PUN', 'AOQ': 'CAT STD', 'APO': 'CAT STD', 'AUU': 'CAT BRI', 
+            'BDA': 'CAT GES', 'BES': 'CAT GES', 'BIT': 'CAT CAD', 'BKL': 'CAT ECE', 
+            'BLN': 'CAT SFE', 'BLX': 'CAT LIN', 'BQN': 'CAT BRI', 'BQS': 'CAT CAD', 
+            'BRI': 'CAT BRI', 'BSD': 'CAT STD', 'CAD': 'CAT CAD', 'CAR': 'CAT CUA', 
+            'CBT': 'CAT VVE', 'CEX': 'CAT GPE', 'CGL': 'CAT MOM', 'CHN': 'CAT CAD', 
+            'CIE': 'CAT STD', 'CMT': 'CAT SCA', 'CPI': 'CAT GES', 'CPQ': 'CAT VAE', 
+            'CRB': 'CAT SFE', 'CRV': 'CAT SCA', 'CTB': 'CAT GES', 'CUA': 'CAT CUA', 
+            'CVY': 'CAT SCA', 'DAG': 'CAT BRI', 'DEC': 'CAT PUN', 'DGA': 'CAT BRI', 
+            'DOT': 'CAT GZL', 'DRG': 'CAT BRI', 'DRL': 'CAT BRI', 'DRS': 'CAT LAS', 
+            'DUL': 'CAT STD', 'EAS': 'CAT PUN', 'EBD': 'CAT GES', 'ECA': 'CAT STD', 
+            'ECE': 'CAT ECE', 'ELB': 'CAT ECE', 'EOW': 'CAT SCA', 'ESM': 'CAT VVE', 
+            'ETD': 'CAT CAD', 'ETV': 'CAT BRI', 'EVO': 'CAT LAS', 'EZL': 'CAT BRI', 
+            'FAL': 'CAT VVE', 'FOY': 'CAT VVE', 'FRL': 'CAT VVE', 'FTR': 'CAT CON', 
+            'GAL': 'CAT LIN', 'GBR': 'CAT CAD', 'GDX': 'CAT BRI', 'GDY': 'CAT BRI', 
+            'GEE': 'CAT BRI', 'GES': 'CAT GES', 'GID': 'CAT BRI', 'GPE': 'CAT GPE', 
+            'GTE': 'CAT MOM', 'GZU': 'CAT STD', 'HCC': 'CAT PUN', 'HCE': 'CAT STD', 
+            'HHS': 'CAT LIN', 'HIA': 'CAT STD', 'HKM': 'CAT STD', 'HLR': 'CAT CAD', 
+            'HOD': 'CAT ALL', 'HOT': 'CAT PUN', 'HSJ': 'CAT STD', 'IDV': 'CAT SFE', 
+            'IMX': 'CAT CAD', 'INA': 'CAT STD', 'INC': 'CAT BRI', 'INM': 'CAT STD', 
+            'INP': 'CAT GZL', 'IOS': 'CAT CAD', 'ISO': 'CAT STD', 'IST': 'CAT STD', 
+            'ITE': 'CAT STD', 'JDS': 'CAT LAS', 'JOY': 'CAT GPE', 'LAE': 'CAT PUN', 
+            'LAP': 'CAT BRI', 'LAS': 'CAT LAS', 'LBN': 'CAT GZL', 'LDE': 'CAT STD', 
+            'LEB': 'CAT STD', 'LEO': 'CAT VVE', 'LFA': 'CAT GZL', 'LFQ': 'CAT GPE', 
+            'LFS': 'CAT STD', 'LIN': 'CAT LIN', 'LJM': 'CAT BRI', 'LLB': 'CAT VVE', 
+            'LMD': 'CAT CAD', 'LNE': 'CAT ECE', 'LNO': 'CAT STD', 'LNP': 'CAT CAD', 
+            'LOP': 'CAT GES', 'LRO': 'CAT STD', 'LSC': 'CAT SCA', 'LVM': 'CAT BRI', 
+            'LVZ': 'CAT ECE', 'LYX': 'CAT GES', 'LZI': 'CAT ALL', 'MAY': 'CAT CON', 
+            'MER': 'CAT STD', 'MHK': 'CAT GZL', 'MIT': 'CAT GZL', 'MJS': 'CAT STD', 
+            'MLE': 'CAT ECE', 'MLU': 'CAT SCA', 'MOM': 'CAT MOM', 'MQU': 'CAT STD', 
+            'MRI': 'CAT STD', 'MRL': 'CAT PUN', 'MSF': 'CAT LAS', 'MSH': 'CAT STD', 
+            'MSK': 'CAT SCA', 'MTB': 'CAT CAD', 'MUF': 'CAT STD', 'NAL': 'CAT CUA', 
+            'NEK': 'CAT SCA', 'NNA': 'CAT STD', 'NRP': 'CAT VAE', 'NRS': 'CAT STD', 
+            'NRT': 'CAT VVE', 'NSM': 'CAT SFE', 'NSY': 'CAT CAD', 'NVG': 'CAT VVE', 
+            'NVZ': 'CAT VVE', 'OBI': 'CAT GZL', 'OGW': 'CAT CON', 'OIC': 'CAT CAD', 
+            'OIL': 'CAT VAE', 'ONO': 'CAT GPE', 'OOE': 'CAT VAE', 'ORN': 'CAT SCA', 
+            'ORQ': 'CAT GPE', 'OSJ': 'CAT CAD', 'OSY': 'CAT VAE', 'PBV': 'CAT STD', 
+            'PEV': 'CAT BRI', 'PFS': 'CAT GES', 'PGI': 'CAT BRI', 'PGX': 'CAT BRI', 
+            'PMD': 'CAT PUN', 'PMK': 'CAT STD', 'PNQ': 'CAT STD', 'PPD': 'CAT STD', 
+            'PPQ': 'CAT STD', 'PPU': 'CAT GES', 'PQD': 'CAT LIN', 'PQG': 'CAT SCA', 
+            'PQO': 'CAT STD', 'PQP': 'CAT SCA', 'PQX': 'CAT STD', 'PQZ': 'CAT STD', 
+            'PSL': 'CAT GES', 'PSQ': 'CAT STD', 'PUF': 'CAT GES', 'PUN': 'CAT PUN', 
+            'PVN': 'CAT GES', 'PVV': 'CAT SCA', 'PWR': 'CAT SCA', 'PXS': 'CAT BRI', 
+            'PXZ': 'CAT GES', 'RBT': 'CAT BRI', 'RCI': 'CAT BRI', 'RCK': 'CAT VVE', 
+            'RCU': 'CAT VVE', 'RDH': 'CAT PUN', 'RGJ': 'CAT BRI', 'RLO': 'CAT VVE', 
+            'RMS': 'CAT SFE', 'RNJ': 'CAT STD', 'ROB': 'CAT VVE', 'RPG': 'CAT BRI', 
+            'RVA': 'CAT BRI', 'SAS': 'CAT VAE', 'SBR': 'CAT VVE', 'SCA': 'CAT SCA', 
+            'SCZ': 'CAT LAS', 'SDS': 'CAT STD', 'SFE': 'CAT SFE', 'SGE': 'CAT VAE', 
+            'SGL': 'CAT SCA', 'SII': 'CAT VAE', 'SJM': 'CAT GZL', 'SNP': 'CAT VAE', 
+            'SPW': 'CAT VAE', 'SRF': 'CAT SFE', 'SSF': 'CAT CAD', 'STD': 'CAT PUN', 
+            'SVI': 'CAT STD', 'SWW': 'CAT PUN', 'TEC': 'CAT BRI', 'TOO': 'CAT VVE', 
+            'TPK': 'CAT STD', 'UBR': 'CAT VVE', 'UDE': 'CAT CAD', 'UGN': 'CAT GZL', 
+            'UHK': 'CAT GZL', 'UID': 'CAT VVE', 'UMO': 'CAT VVE', 'UOL': 'CAT ECE', 
+            'UPE': 'CAT VVE', 'UPI': 'CAT LAS', 'URK': 'CAT ECE', 'VAF': 'CAT SCA', 
+            'VAL': 'CAT VAE', 'VEP': 'CAT GES', 'VGA': 'CAT SCA', 'VJU': 'CAT CAD', 
+            'VLB': 'CAT STD', 'VLC': 'CAT STD', 'VMT': 'CAT VVE', 'VNE': 'CAT VAE', 
+            'VPP': 'CAT GZL', 'VSD': 'CAT SFE', 'VSE': 'CAT STD', 'VSK': 'CAT CAD', 
+            'VSQ': 'CAT SFE', 'VVE': 'CAT VVE', 'VYD': 'CAT CAD', 'VYG': 'CAT VAE', 
+            'XEP': 'CAT CAD', 'YES': 'CAT CAD', 'ZNL': 'CAT VVE', 'ZOZ': 'CAT SFE',  
+            'EFA': 'CAT ALL', 'LXE': 'CAT ALL', 'NA5': 'CAT ALL', 'NA6': 'CAT ALL',
+            'NA7': 'CAT ALL', 'NA8': 'CAT ALL', 'NA9': 'CAT ALL', 'BRQ': 'CAT CAD',
+            'CH2': 'CAT CAD', 'CH4': 'CAT CAD', 'CYD': 'CAT CAD', 'DCO': 'CAT CAD',
+            'GAG': 'CAT CAD', 'GPY': 'CAT CAD', 'GTA': 'CAT CAD', 'LHE': 'CAT CAD',
+            'LRA': 'CAT CAD', 'NB1': 'CAT CAD', 'NB3': 'CAT CAD', 'NB5': 'CAT CAD',
+            'NB6': 'CAT CAD', 'NB7': 'CAT CAD', 'NB8': 'CAT CAD', 'NB9': 'CAT CAD',
+            'ND6': 'CAT CAD', 'ND7': 'CAT CAD', 'RXY': 'CAT CAD', 'SNJ': 'CAT CAD',
+            'YGO': 'CAT CAD', 'YGP': 'CAT CAD', 'ROP': 'CAT CON', 'RTZ': 'CAT CON',
+            'RBF': 'CAT ECE', 'AHF': 'CAT GES', 'DGN': 'CAT GES', 'HIS': 'CAT GES',
+            'HDN': 'CAT LAS', 'HZI': 'CAT LAS', 'YRE': 'CAT LAS', 'AAM': 'CAT LIN',
+            'CH5': 'CAT LIN', 'CH6': 'CAT LIN', 'EL9': 'CAT LIN', 'GBD': 'CAT LIN',
+            'GDE': 'CAT LIN', 'GNZ': 'CAT LIN', 'ITR': 'CAT LIN', 'KS4': 'CAT LIN',
+            'KS5': 'CAT LIN', 'KS6': 'CAT LIN', 'KS7': 'CAT LIN', 'LAI': 'CAT LIN',
+            'MGU': 'CAT LIN', 'NC7': 'CAT LIN', 'NC8': 'CAT LIN', 'ND8': 'CAT LIN',
+            'ND9': 'CAT LIN', 'NE0': 'CAT LIN', 'NE1': 'CAT LIN', 'NE2': 'CAT LIN',
+            'NRI': 'CAT LIN', 'OOS': 'CAT LIN', 'OWP': 'CAT LIN', 'QA4': 'CAT LIN',
+            'QN2': 'CAT LIN', 'QN3': 'CAT LIN', 'QN4': 'CAT LIN', 'QN5': 'CAT LIN',
+            'QN6': 'CAT LIN', 'QN7': 'CAT LIN', 'QN8': 'CAT LIN', 'QN9': 'CAT LIN',
+            'QO0': 'CAT LIN', 'QO1': 'CAT LIN', 'QO2': 'CAT LIN', 'QO3': 'CAT LIN',
+            'QO4': 'CAT LIN', 'QO5': 'CAT LIN', 'QO6': 'CAT LIN', 'QO7': 'CAT LIN',
+            'QO8': 'CAT LIN', 'QO9': 'CAT LIN', 'QP0': 'CAT LIN', 'QP1': 'CAT LIN',
+            'QP2': 'CAT LIN', 'QP3': 'CAT LIN', 'QP4': 'CAT LIN', 'QP5': 'CAT LIN',
+            'QP6': 'CAT LIN', 'QP7': 'CAT LIN', 'QP8': 'CAT LIN', 'QP9': 'CAT LIN',
+            'QQ0': 'CAT LIN', 'QQ1': 'CAT LIN', 'QQ2': 'CAT LIN', 'QQ3': 'CAT LIN',
+            'QQ4': 'CAT LIN', 'RFA': 'CAT LIN', 'RFY': 'CAT LIN', 'RJW': 'CAT LIN',
+            'RNX': 'CAT LIN', 'S6D': 'CAT LIN', 'S6F': 'CAT LIN', 'SM9': 'CAT LIN',
+            'SN0': 'CAT LIN', 'SN2': 'CAT LIN', 'SN5': 'CAT LIN', 'SN7': 'CAT LIN',
+            'SN8': 'CAT LIN', 'SN9': 'CAT LIN', 'SO0': 'CAT LIN', 'SO1': 'CAT LIN',
+            'SO2': 'CAT LIN', 'SO3': 'CAT LIN', 'SO4': 'CAT LIN', 'SO6': 'CAT LIN',
+            'SO7': 'CAT LIN', 'SO9': 'CAT LIN', 'VF5': 'CAT LIN', 'VH2': 'CAT LIN',
+            'VMI': 'CAT LIN', 'VX0': 'CAT LIN', 'VX1': 'CAT LIN', 'VX2': 'CAT LIN',
+            'VX4': 'CAT LIN', 'VX5': 'CAT LIN', 'VX6': 'CAT LIN', 'GTN': 'CAT MOM',
+            'MMF': 'CAT MOM', 'NC1': 'CAT MOM', 'NC2': 'CAT MOM', 'NC3': 'CAT MOM',
+            'NC4': 'CAT MOM', 'NC5': 'CAT MOM', 'NC6': 'CAT MOM', 'NC9': 'CAT MOM',
+            'ND0': 'CAT MOM', 'ND1': 'CAT MOM', 'ND2': 'CAT MOM', 'ND3': 'CAT MOM',
+            'ND4': 'CAT MOM', 'ND5': 'CAT MOM', 'QB4': 'CAT MOM', 'RYS': 'CAT MOM',
+            'EOX': 'CAT SCA', 'JCK': 'CAT SCA', 'RGQ': 'CAT SFE', 'SOI': 'CAT VVE',
+            'ZPJ': 'CAT CAD'
+        }
+
+        # =========================================================================
+        # 🛡️ EXTRACCIÓN Y MAPEO (BLINDADO CON 3 NIVELES DE RESPALDO)
+        # =========================================================================
+        def asignar_cat_definitivo(row):
+            distrito = str(row.get('DISTRITO', '')).strip().upper()
+            ct = str(row.get('CT', '')).strip().upper()
+            area = str(row.get('AREA_CORREGIDA', '')).strip().upper()
+            
+            # 🧹 1. Limpiar nulos y falsos vacíos que genera Excel/Pandas
+            if distrito == 'NAN': distrito = ''
+            if ct == 'NAN': ct = ''
+            
+            # 🥇 2. Intento principal: Por Distrito (Exactitud de 3 letras)
+            if distrito and not distrito.startswith('SIN'):
+                siglas = distrito[:3]
+                if siglas in diccionario_tiendas:
+                    return diccionario_tiendas[siglas]
+            
+            # 🥈 3. Respaldo secundario: Por CT
+            # Usamos palabras clave para que coincida aunque tenga espacios extras o prefijos
+            diccionario_respaldo_ct = {
+                'MONTEMORELOS': 'CAT MOM',
+                'APODACA': 'CAT STD',
+                'ESCOBEDO': 'CAT STD', 
+                'CADEREYTA': 'CAT CAD',
+                'LINARES': 'CAT LIN',
+                'GONZALITOS': 'CAT CON',
+                'LINCOLN': 'CAT VVE',
+                'REVOLUCION': 'CAT BRI',
+                'SAN PEDRO': 'CAT VAE',
+                'COLON': 'CAT CUA',
+                'SANTA CATARINA': 'CAT SCA',
+                'PUENTES': 'CAT PUN',
+                'SANTA FE': 'CAT SFE',
+                'LA SILLA': 'CAT LAS',
+                'UNIVERSIDAD': 'CAT GES'
+            }
+            if ct and not ct.startswith('SIN'):
+                for clave, cat in diccionario_respaldo_ct.items():
+                    if clave in ct:
+                        return cat
+                        
+            # 🥉 4. Último recurso: Fondo de Red por Área
+            # Si el folio viene 100% en blanco (Sin Distrito Y Sin CT), lo mandamos 
+            # a la tienda matriz del área para que NUNCA aparezca "SIN ASIGNAR".
+            diccionario_respaldo_area = {
+                'MONTERREY 1': 'CAT BRI',
+                'MONTERREY 2': 'CAT GES',
+                'MONTERREY 3': 'CAT STD'
+            }
+            if area in diccionario_respaldo_area:
+                return diccionario_respaldo_area[area]
+                
+            return 'CAT SIN ASIGNAR'
+
+        df['TIENDA'] = df.apply(asignar_cat_definitivo, axis=1)
+        # =========================================================================
 
         # -----------------------------------------------------
         # 🛠️ FUNCIONES DE FORMATO Y LÓGICA
@@ -283,9 +437,7 @@ if archivo_a_procesar is not None:
             )
             return estilo
 
-        # 📥 FUNCIÓN PARA BOTONES DE DESCARGA DINÁMICOS
         def generar_boton_descarga(df_datos, base_nombre, btn_key):
-            # Le agregamos la región al nombre del archivo descargado
             nombre_final = f"{base_nombre}_{region_seleccionada.lower()}.csv"
             csv = df_datos.to_csv(index=False).encode('utf-8')
             st.download_button(
@@ -317,262 +469,266 @@ if archivo_a_procesar is not None:
                 return [''] * len(row)
             return df.style.apply(aplicar_colores, axis=1)
 
-        # -----------------------------------------------------
-        # 📊 DIBUJADO DE TABLAS Y BOTONES
-        # -----------------------------------------------------
-        
-        # 1. Resumen General
-        st.subheader(f"📑 1. Últimos 6 Meses (Demanda por Bolsa) - {region_seleccionada}")
-        df_6m = df[df['ULTIMOS_6_MESES'] == 'SI']
-        estatus_excluidos = ["7. ASPECTOS TÉCNICOS", "8 PENDIENTES BOLSA VENTAS + CD", "10 NO VENTAS + CD"]
-        df_6m = df_6m[~df_6m['ESTATUS_AGR_N2'].isin(estatus_excluidos)]
-
-        if not df_6m.empty:
-            td_6m = pd.pivot_table(df_6m, index=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'], columns='AREA_CORREGIDA', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            
-            total_gen_6m = td_6m.loc[['Total']] if 'Total' in td_6m.index.get_level_values(0) else pd.DataFrame()
-            td_6m_sin_total = td_6m.drop('Total', level=0) if 'Total' in td_6m.index.get_level_values(0) else td_6m
-            
-            subtotales_n2 = td_6m_sin_total.groupby(level=0).sum()
-            subtotales_n2.index = pd.MultiIndex.from_arrays([subtotales_n2.index, [''] * len(subtotales_n2.index)])
-            
-            td_6m_final = pd.concat([td_6m_sin_total, subtotales_n2])
-            nuevo_indice = sorted(td_6m_final.index, key=lambda x: (ordenar_numerico(x[0]), str(x[1])))
-            td_6m_final = td_6m_final.reindex(nuevo_indice)
-            
-            if not total_gen_6m.empty:
-                td_6m_final = pd.concat([td_6m_final, total_gen_6m])
-            
-            td_6m_final.index.names = ['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1']
-            td_6m_final = td_6m_final.reset_index()
-            
-            vistos = {}
-            def unificar_estatus(fila):
-                n2 = str(fila['ESTATUS_AGR_N2']) if pd.notna(fila['ESTATUS_AGR_N2']) else ''
-                n1 = str(fila['ESTATUS_AGR_N1']) if pd.notna(fila['ESTATUS_AGR_N1']) else ''
-                if n2 == 'Total': texto = 'Total General'
-                elif n1 == '': texto = n2  
-                else: texto = '\xa0\xa0\xa0\xa0\xa0\xa0' + n1
-                if texto in vistos: vistos[texto] += 1
-                else: vistos[texto] = 0
-                return texto + ('\u200b' * vistos[texto])
-            
-            td_6m_final['ESTATUS_AGR'] = td_6m_final.apply(unificar_estatus, axis=1)
-            td_6m_final = td_6m_final.set_index('ESTATUS_AGR')
-            td_6m_final = td_6m_final.drop(columns=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'])
-            
-            st.table(estilo_tabla_1(td_6m_final))
-            generar_boton_descarga(df_6m, 'folios_t1_6m', btn_key='btn1')
+        # =========================================================
+        # 📂 CREACIÓN DE PESTAÑAS (OPERATIVA Y COMERCIAL)
+        # =========================================================
+        if region_seleccionada == "Monterrey":
+            tab_operativa, tab_comercial = st.tabs(["🏢 Vista Operativa (Por CT)", "🏪 Vista Comercial (Por CAT)"])
         else:
-            st.info("No hay datos para esta tabla.")
-        
-        st.divider()
+            tab_operativa, = st.tabs(["🏢 Vista Operativa (Por CT)"])
+            tab_comercial = None
 
-        # 2. Bolsa 4
-        st.subheader("✔ 2. Ult 6 Meses (BOLSA 4xDIL2)")
-        df_b4 = df[df['ESTATUS_AGR_N2'].str.contains('4', case=False, na=False)]
-        if not df_b4.empty:
-            td_b4 = pd.pivot_table(df_b4, index=['AREA_CORREGIDA', 'ESTATUS_AGR_N1'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            cols = [c for c in orden_columnas if c in td_b4.columns] + [c for c in td_b4.columns if c not in orden_columnas]
-            st.table(estilo_resaltado(aplicar_subtotales(td_b4[cols])))
-            generar_boton_descarga(df_b4, 'folios_t2_bolsa4', btn_key='btn2')
-        else: st.info("No hay datos.")
+        # =========================================================
+        # PESTAÑA 1: VISTA OPERATIVA
+        # =========================================================
+        with tab_operativa:
+            st.subheader(f"📑 1. Últimos 6 Meses (Demanda por Bolsa) - {region_seleccionada}")
+            df_6m = df[df['ULTIMOS_6_MESES'] == 'SI']
+            estatus_excluidos = ["7. ASPECTOS TÉCNICOS", "8 PENDIENTES BOLSA VENTAS + CD", "10 NO VENTAS + CD"]
+            df_6m = df_6m[~df_6m['ESTATUS_AGR_N2'].isin(estatus_excluidos)]
 
-        st.divider()
-
-        # 3. Bolsa 5xDIL2 - Solo PS
-        st.subheader("🛠 3. Ult 6 Meses (BOLSA 5xDIL2 - Solo PS)")
-        
-        df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
-        if not df_b5_ps.empty:
-            
-            # 🔘 NUEVO: Interruptor para ocultar/mostrar la captura
-            mostrar_captura = st.toggle("📝 Compromiso Produccion", value=False)
-            
-            # Procesamos tabla izquierda (Esto se hace siempre para mostrar los datos base)
-            td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
-            df_con_subtotales = aplicar_subtotales(td_b5_ps[cols])
-            
-            # Lógica de columnas dinámicas
-            if mostrar_captura:
-                # Si está prendido, partimos la pantalla en dos
-                col_t3_izq, col_t3_der = st.columns([1.1, 1.1]) 
+            if not df_6m.empty:
+                td_6m = pd.pivot_table(df_6m, index=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'], columns='AREA_CORREGIDA', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                
+                total_gen_6m = td_6m.loc[['Total']] if 'Total' in td_6m.index.get_level_values(0) else pd.DataFrame()
+                td_6m_sin_total = td_6m.drop('Total', level=0) if 'Total' in td_6m.index.get_level_values(0) else td_6m
+                
+                subtotales_n2 = td_6m_sin_total.groupby(level=0).sum()
+                subtotales_n2.index = pd.MultiIndex.from_arrays([subtotales_n2.index, [''] * len(subtotales_n2.index)])
+                
+                td_6m_final = pd.concat([td_6m_sin_total, subtotales_n2])
+                nuevo_indice = sorted(td_6m_final.index, key=lambda x: (ordenar_numerico(x[0]), str(x[1])))
+                td_6m_final = td_6m_final.reindex(nuevo_indice)
+                
+                if not total_gen_6m.empty:
+                    td_6m_final = pd.concat([td_6m_final, total_gen_6m])
+                
+                td_6m_final.index.names = ['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1']
+                td_6m_final = td_6m_final.reset_index()
+                
+                vistos = {}
+                def unificar_estatus(fila):
+                    n2 = str(fila['ESTATUS_AGR_N2']) if pd.notna(fila['ESTATUS_AGR_N2']) else ''
+                    n1 = str(fila['ESTATUS_AGR_N1']) if pd.notna(fila['ESTATUS_AGR_N1']) else ''
+                    if n2 == 'Total': texto = 'Total General'
+                    elif n1 == '': texto = n2  
+                    else: texto = '\xa0\xa0\xa0\xa0\xa0\xa0' + n1
+                    if texto in vistos: vistos[texto] += 1
+                    else: vistos[texto] = 0
+                    return texto + ('\u200b' * vistos[texto])
+                
+                td_6m_final['ESTATUS_AGR'] = td_6m_final.apply(unificar_estatus, axis=1)
+                td_6m_final = td_6m_final.set_index('ESTATUS_AGR').drop(columns=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'])
+                
+                st.table(estilo_tabla_1(td_6m_final))
+                generar_boton_descarga(df_6m, 'folios_t1_6m', btn_key='btn1')
             else:
-                # Si está apagado, la tabla izquierda usa todo su espacio natural
-                col_t3_izq = st.container()
+                st.info("No hay datos para esta tabla.")
             
-            with col_t3_izq:
-                st.table(estilo_resaltado(df_con_subtotales))
-                generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
-            
-            # ⬇️ Todo el bloque de Google Sheets se ejecuta SOLO si el switch está prendido
-            if mostrar_captura:
-                with col_t3_der:
-                    st.markdown("<div style='height: 38px;'></div>", unsafe_allow_html=True)
-                    
-                    # 1. 🌐 CONECTAR A GOOGLE SHEETS
-                    url_sheet = "https://docs.google.com/spreadsheets/d/1cYHq6afeVavGNGSRPC3lPxzLN5E5wIqFFa2BSp0nxZY/edit?gid=0#gid=0"
-                    try:
-                        conn = st.connection("gsheets", type=GSheetsConnection)
-                        df_historico = conn.read(spreadsheet=url_sheet, worksheet=region_seleccionada, ttl=0, usecols=[0,1,2,3,4,5])
-                    except Exception as e:
-                        df_historico = pd.DataFrame()
-                    
-                    # 2. BASE DE CTS
-                    df_captura = df_con_subtotales.copy().reset_index()
-                    df_base = pd.DataFrame({
-                        'AREA': df_captura['AREA_CORREGIDA'] if 'AREA_CORREGIDA' in df_captura.columns else df_captura.iloc[:, 0],
-                        'CT': df_captura['CT'] if 'CT' in df_captura.columns else df_captura.iloc[:, 1],
-                        'Folios': df_captura['Total'] if 'Total' in df_captura.columns else 0
-                    })
-                    df_base.loc[df_base['AREA'].astype(str).str.lower() == 'total', 'CT'] = 'GRAN TOTAL'
-                    
-                    # 3. MERGE CORREGIDO
-                    if not df_historico.empty and 'CT' in df_historico.columns:
-                        df_hist_limpio = df_historico[~df_historico['CT'].astype(str).str.contains('TOTAL', case=False, na=False)].drop_duplicates(subset=['CT'])
-                        df_merge = pd.merge(df_base, df_hist_limpio[['CT', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']], on='CT', how='left')
-                    else:
-                        df_merge = df_base.copy()
-                        df_merge['SIAC'] = 0
-                        df_merge['Tecs'] = 0
-                        df_merge['Comp'] = 0.0
-                        df_merge['Prod. Esp'] = 0
-                    
-                    df_merge['SIAC'] = df_merge['SIAC'].fillna(0).astype(int)
-                    df_merge['Tecs'] = df_merge['Tecs'].fillna(0).astype(int)
-                    df_merge['Comp'] = df_merge['Comp'].fillna(0.0)
-                    df_merge['Prod. Esp'] = df_merge['Prod. Esp'].fillna(0).astype(int)
-                    
-                    # 🔄 AUTO-SUMAS INICIALES
-                    mask_cts_ini = (~df_merge['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_merge['AREA'].astype(str).str.lower() != 'total')
-                    for area in df_merge['AREA'].unique():
-                        if str(area).lower() != 'total':
-                            mask_area_cts_ini = mask_cts_ini & (df_merge['AREA'] == area)
-                            mask_sub_ini = (df_merge['AREA'] == area) & (df_merge['CT'].astype(str).str.contains('TOTAL', case=False))
-                            if mask_sub_ini.any():
-                                df_merge.loc[mask_sub_ini, 'SIAC'] = df_merge.loc[mask_area_cts_ini, 'SIAC'].sum()
-                                df_merge.loc[mask_sub_ini, 'Tecs'] = df_merge.loc[mask_area_cts_ini, 'Tecs'].sum()
-                                df_merge.loc[mask_sub_ini, 'Prod. Esp'] = df_merge.loc[mask_area_cts_ini, 'Prod. Esp'].sum()
-                                df_merge.loc[mask_sub_ini, 'Comp'] = 0
-                                
-                    mask_gran_ini = df_merge['AREA'].astype(str).str.lower() == 'total'
-                    if mask_gran_ini.any():
-                        df_merge.loc[mask_gran_ini, 'SIAC'] = df_merge.loc[mask_cts_ini, 'SIAC'].sum()
-                        df_merge.loc[mask_gran_ini, 'Tecs'] = df_merge.loc[mask_cts_ini, 'Tecs'].sum()
-                        df_merge.loc[mask_gran_ini, 'Prod. Esp'] = df_merge.loc[mask_cts_ini, 'Prod. Esp'].sum()
-                        df_merge.loc[mask_gran_ini, 'Comp'] = 0
+            st.divider()
 
-                    df_mostrar = df_merge.drop(columns=['AREA'])
+            st.subheader("✔ 2. Ult 6 Meses (BOLSA 4xDIL2)")
+            df_b4 = df[df['ESTATUS_AGR_N2'].str.contains('4', case=False, na=False)]
+            if not df_b4.empty:
+                td_b4 = pd.pivot_table(df_b4, index=['AREA_CORREGIDA', 'ESTATUS_AGR_N1'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                cols = [c for c in orden_columnas if c in td_b4.columns] + [c for c in td_b4.columns if c not in orden_columnas]
+                st.table(estilo_resaltado(aplicar_subtotales(td_b4[cols])))
+                generar_boton_descarga(df_b4, 'folios_t2_bolsa4', btn_key='btn2')
+            else: st.info("No hay datos.")
+
+            st.divider()
+
+            st.subheader("🛠 3. Ult 6 Meses (BOLSA 5xDIL2 - Solo PS)")
+            df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
+            if not df_b5_ps.empty:
+                td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
+                st.table(estilo_resaltado(aplicar_subtotales(td_b5_ps[cols])))
+                generar_boton_descarga(df_b5_ps, 'folios_t3_bolsa5_ps', btn_key='btn3')
+            else: st.info("No hay datos.")
+
+            st.divider()
+
+            st.subheader("⚙ 4. Ult 6 Meses (BOLSA 5 por Etapa)")
+            df_b5 = df[df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)]
+            if not df_b5.empty:
+                td_b5 = pd.pivot_table(df_b5, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                st.table(estilo_resaltado(aplicar_subtotales(td_b5)))
+                generar_boton_descarga(df_b5, 'folios_t4_bolsa5_etapas', btn_key='btn4')
+            else: st.info("No hay datos.")
+
+            st.divider()
+
+            st.subheader("📞 5. Ult 6 Meses (PORTAS)")
+            df_p = df[(df['PORTABILIDAD']=='SI') & (df['ULTIMOS_6_MESES']=='SI') & (df['ETAPA_OS']=='PS')]
+            if not df_p.empty:
+                td_p = pd.pivot_table(df_p, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                cols = [c for c in orden_columnas if c in td_p.columns] + [c for c in td_p.columns if c not in orden_columnas]
+                st.table(estilo_resaltado(aplicar_subtotales(td_p[cols])))
+                generar_boton_descarga(df_p, 'folios_t5_portas', btn_key='btn5')
+            else: st.info("No hay datos.")
+
+            st.divider()
+
+            st.subheader("🏠 6. Ult 6 Meses (CAMB DOM)")        
+            df_cd = df[df['TIPO_MOVIMIENTO'].str.contains('CAMB DOM', case=False, na=False)]
+            if not df_cd.empty:
+                td_cd = pd.pivot_table(df_cd, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                st.table(estilo_resaltado(aplicar_subtotales(td_cd)))
+                generar_boton_descarga(df_cd, 'folios_t6_cambio_domicilio', btn_key='btn6')
+            else: st.info("No hay datos.")
+
+        # =========================================================
+        # PESTAÑA 2: VISTA COMERCIAL (Por CAT) - Solo para Monterrey
+        # =========================================================
+        if region_seleccionada == "Monterrey" and tab_comercial is not None:
+            with tab_comercial:
+                st.subheader("📊 Análisis General por CAT")
+                
+                # Submenú horizontal
+                areas_disponibles = sorted(df['AREA_CORREGIDA'].dropna().unique().tolist())
+                opciones_filtro = ["Todas las Áreas"] + areas_disponibles
+                
+                area_seleccionada_com = st.radio(
+                    "🔎 Filtrar vista comercial por:", 
+                    opciones_filtro, 
+                    horizontal=True
+                )
+                st.divider()
+                
+                # --- 🧹 LÓGICA EXCLUSIVA COMERCIAL ---
+                df_com = df.copy()
+                
+                # 1. Regla: Sin folios Posteados
+                if 'ESTATUS_OS' in df_com.columns:
+                    df_com = df_com[df_com['ESTATUS_OS'].astype(str).str.upper() != 'POSTEADA']
+                
+                # 2. Regla: Sin Estatus Basura
+                if 'ESTATUS_AGR_N2' in df_com.columns:
+                    excluir_n2 = '10 NO VENTAS|8 PENDIENTES BOLSA'
+                    df_com = df_com[~df_com['ESTATUS_AGR_N2'].astype(str).str.contains(excluir_n2, case=False, na=False, regex=True)]
+                
+                # (SE ELIMINÓ LA REGLA DE REASIGNACIÓN PARA RESPETAR ESTRICTAMENTE EL DISTRITO Y CT)
+
+                # --- ✂️ APLICAR FILTRO DEL SUBMENÚ ---
+                # Si el usuario seleccionó un área específica, filtramos la base de datos comercial
+                if area_seleccionada_com != "Todas las Áreas":
+                    df_com = df_com[df_com['AREA_CORREGIDA'] == area_seleccionada_com]
+
+                # --- 📉 TABLA 1: Demanda cruzada por Tienda ---
+                st.subheader(f"📑 1. Últimos 6 Meses (Demanda por Bolsa) - {region_seleccionada}")
+                df_t1_com = df_com[df_com['ULTIMOS_6_MESES'] == 'SI']
+                df_t1_com = df_t1_com[~df_t1_com['ESTATUS_AGR_N2'].astype(str).str.contains('7. ASPECTOS TÉCNICOS', case=False, na=False)]
+                
+                if not df_t1_com.empty:
+                    td_t1_com = pd.pivot_table(df_t1_com, index=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'], columns='TIENDA', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                     
-                    def pintar_totales(row):
-                        if 'TOTAL ÁREA' in str(row['CT']):
-                            return ['background-color: #ADD8E6; font-weight: bold; color: black;'] * len(row)
-                        return [''] * len(row)
+                    total_gen = td_t1_com.loc[['Total']] if 'Total' in td_t1_com.index.get_level_values(0) else pd.DataFrame()
+                    td_sin_total = td_t1_com.drop('Total', level=0) if 'Total' in td_t1_com.index.get_level_values(0) else td_t1_com
                     
-                    df_estilizado = df_mostrar.style.apply(pintar_totales, axis=1)
-                    alto_dinamico = int((len(df_mostrar) * 36) + 78) 
+                    subtotales = td_sin_total.groupby(level=0).sum()
+                    subtotales.index = pd.MultiIndex.from_arrays([subtotales.index, [''] * len(subtotales.index)])
                     
-                    # 4. MOSTRAR EDITOR
-                    df_editado = st.data_editor(
-                        df_estilizado, 
-                        hide_index=True,
-                        use_container_width=True,
-                        height=alto_dinamico,
-                        disabled=['CT', 'Folios', 'Prod. Esp'], 
-                        column_config={
-                            "CT": st.column_config.TextColumn("CT\n", width="medium"),
-                            "Folios": st.column_config.NumberColumn("Folios\n", width=50),
-                            "SIAC": st.column_config.NumberColumn("SIAC\n", width=60),
-                            "Tecs": st.column_config.NumberColumn("Tecs\n", width=60),
-                            "Comp": st.column_config.NumberColumn("Comp\n", width=80),
-                            "Prod. Esp": st.column_config.NumberColumn("Prod. Esp\n", width=80, format="%d")
-                        }
+                    td_final = pd.concat([td_sin_total, subtotales])
+                    td_final = td_final.reindex(sorted(td_final.index, key=lambda x: (ordenar_numerico(x[0]), str(x[1]))))
+                    
+                    if not total_gen.empty:
+                        td_final = pd.concat([td_final, total_gen])
+                    
+                    td_final.index.names = ['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1']
+                    td_final = td_final.reset_index()
+                    
+                    vistos_c = {}
+                    def unificar_estatus_c(fila):
+                        n2 = str(fila['ESTATUS_AGR_N2']) if pd.notna(fila['ESTATUS_AGR_N2']) else ''
+                        n1 = str(fila['ESTATUS_AGR_N1']) if pd.notna(fila['ESTATUS_AGR_N1']) else ''
+                        if n2 == 'Total': texto = 'Total General'
+                        elif n1 == '': texto = n2  
+                        else: texto = '\xa0\xa0\xa0\xa0\xa0\xa0' + n1
+                        if texto in vistos_c: vistos_c[texto] += 1
+                        else: vistos_c[texto] = 0
+                        return texto + ('\u200b' * vistos_c[texto])
+                    
+                    td_final['ESTATUS_AGR'] = td_final.apply(unificar_estatus_c, axis=1)
+                    td_final = td_final.set_index('ESTATUS_AGR').drop(columns=['ESTATUS_AGR_N2', 'ESTATUS_AGR_N1'])
+                    
+                    st.table(estilo_tabla_1(td_final))
+                    # ⬇️ BOTÓN DE DESCARGA AÑADIDO ⬇️
+                    generar_boton_descarga(df_t1_com, 'folios_comercial_t1', btn_key='btn_com_1')
+                else:
+                    st.info("No hay datos para la Tabla 1 Comercial.")
+                
+                st.divider()
+
+                # --- 📉 TABLA 2: Bolsa 4xDIL2 (Únicamente 4.2 Cliente en Contactación) ---
+                st.subheader("✔ 2. Ult 6 Meses (BOLSA 4xDIL2) - Contactación")
+                df_t2_com = df_com[df_com['ESTATUS_AGR_N1'].astype(str).str.contains('4\.2 CLIENTE EN CONTACTACION', case=False, na=False, regex=True)]
+                
+                if not df_t2_com.empty:
+                    td_t2_com = pd.pivot_table(df_t2_com, index=['AREA_CORREGIDA', 'TIENDA'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                    cols_t2 = [c for c in orden_columnas if c in td_t2_com.columns] + [c for c in td_t2_com.columns if c not in orden_columnas]
+                    st.table(estilo_resaltado(aplicar_subtotales(td_t2_com[cols_t2])))
+                    # ⬇️ BOTÓN DE DESCARGA AÑADIDO ⬇️
+                    generar_boton_descarga(df_t2_com, 'folios_comercial_t2_contacto', btn_key='btn_com_2')
+                else:
+                    st.info("No hay folios en 4.2 Cliente en Contactación.")
+
+                st.divider()
+
+                # --- 📉 TABLA 3: OS Comerciales ---
+                st.subheader("💼 3. OS Comerciales")
+                
+                # Filtramos por las etapas comerciales requeridas
+                etapas_comerciales = ['C8', 'CD', 'CE', 'CL', 'CO', 'CP', 'CW', 'OQ', 'SN']
+                df_t3_com = df_com[df_com['ETAPA_OS'].isin(etapas_comerciales)]
+                
+                if not df_t3_com.empty:
+                    td_t3_com = pd.pivot_table(
+                        df_t3_com, 
+                        index=['AREA_CORREGIDA', 'TIENDA'], 
+                        columns='Rango x Dil', 
+                        values='FOLIO', 
+                        aggfunc='count', 
+                        fill_value=0, 
+                        margins=True, 
+                        margins_name='Total'
+                    )
+                    cols_t3 = [c for c in orden_columnas if c in td_t3_com.columns] + [c for c in td_t3_com.columns if c not in orden_columnas]
+                    st.table(estilo_resaltado(aplicar_subtotales(td_t3_com[cols_t3])))
+                    # ⬇️ BOTÓN DE DESCARGA AÑADIDO ⬇️
+                    generar_boton_descarga(df_t3_com, 'folios_comercial_t3_631', btn_key='btn_com_3')
+                else:
+                    st.info("No hay folios para las OS Comerciales seleccionadas.")
+
+                st.divider()
+
+                # --- 📉 TABLA 4: Portabilidad en TL ---
+                st.subheader("💼 4. Portabilidad en TL")
+                
+                # Filtramos por la etapa 'TL'. 
+                # (Opcional: Agregué la condición de PORTABILIDAD == 'SI' basándome en el título. Si no aplica, puedes borrar ese fragmento).
+                df_t4_tl_com = df_com[(df_com['ETAPA_OS'] == 'TL') & (df_com['PORTABILIDAD'] == 'SI')]
+                
+                # Validación correcta utilizando el dataframe de la Tabla 4
+                if not df_t4_tl_com.empty:
+                    td_t4_com = pd.pivot_table(
+                        df_t4_tl_com, 
+                        index=['AREA_CORREGIDA', 'TIENDA'], 
+                        columns='Rango x Dil', 
+                        values='FOLIO', 
+                        aggfunc='count', 
+                        fill_value=0, 
+                        margins=True, 
+                        margins_name='Total'
                     )
                     
-                    # 5. BOTÓN MAESTRO: Calcula y Direcciona al Acumulado Correcto
-                    if st.button(f"☁️ Guardar y Acumular ({region_seleccionada})", type="primary"):
-                        df_guardar = df_editado.copy()
-                        
-                        df_guardar['Prod. Esp'] = (df_guardar['Tecs'] * df_guardar['Comp']).round().astype(int)
-                        mask_cts = (~df_base['CT'].astype(str).str.contains('TOTAL', case=False)) & (df_base['AREA'].astype(str).str.lower() != 'total')
-                        
-                        for area in df_base['AREA'].unique():
-                            if str(area).lower() != 'total':
-                                mask_area_cts = mask_cts & (df_base['AREA'] == area)
-                                mask_sub = (df_base['AREA'] == area) & (df_base['CT'].astype(str).str.contains('TOTAL', case=False))
-                                if mask_sub.any():
-                                    df_guardar.loc[mask_sub, 'SIAC'] = df_guardar.loc[mask_area_cts, 'SIAC'].sum()
-                                    df_guardar.loc[mask_sub, 'Tecs'] = df_guardar.loc[mask_area_cts, 'Tecs'].sum()
-                                    df_guardar.loc[mask_sub, 'Prod. Esp'] = df_guardar.loc[mask_area_cts, 'Prod. Esp'].sum()
-                                    df_guardar.loc[mask_sub, 'Comp'] = 0
-                                    
-                        mask_gran = df_base['AREA'].astype(str).str.lower() == 'total'
-                        if mask_gran.any():
-                            df_guardar.loc[mask_gran, 'SIAC'] = df_guardar.loc[mask_cts, 'SIAC'].sum()
-                            df_guardar.loc[mask_gran, 'Tecs'] = df_guardar.loc[mask_cts, 'Tecs'].sum()
-                            df_guardar.loc[mask_gran, 'Prod. Esp'] = df_guardar.loc[mask_cts, 'Prod. Esp'].sum()
-                            df_guardar.loc[mask_gran, 'Comp'] = 0
-                        
-                        df_final_region = df_guardar[['CT', 'Folios', 'SIAC', 'Tecs', 'Comp', 'Prod. Esp']]
-                        conn.update(spreadsheet=url_sheet, worksheet=region_seleccionada, data=df_final_region)
-                        
-                        # C. LÓGICA DEL ACUMULADO DINÁMICO
-                        hoja_acumulado = "AcumuladoM" if "Monterrey" in region_seleccionada else "AcumuladoT"
-                        fecha_hoy = datetime.datetime.now().strftime("%d/%m/%Y")
-                        
-                        df_hist_nuevo = df_final_region.copy()
-                        df_hist_nuevo.insert(0, 'Fecha', fecha_hoy)
-                        df_hist_nuevo.insert(1, 'Region', region_seleccionada)
-                        
-                        try:
-                            df_acumulado_base = conn.read(spreadsheet=url_sheet, worksheet=hoja_acumulado, ttl=0)
-                            if not df_acumulado_base.empty and 'Fecha' in df_acumulado_base.columns:
-                                mask_duplicados = (df_acumulado_base['Fecha'] == fecha_hoy) & (df_acumulado_base['Region'] == region_seleccionada)
-                                df_acumulado_limpio = df_acumulado_base[~mask_duplicados]
-                            else:
-                                df_acumulado_limpio = pd.DataFrame()
-                        except:
-                            df_acumulado_limpio = pd.DataFrame()
-                        
-                        df_final_acumulado = pd.concat([df_acumulado_limpio, df_hist_nuevo], ignore_index=True)
-                        conn.update(spreadsheet=url_sheet, worksheet=hoja_acumulado, data=df_final_acumulado)
-
-                        st.success(f"¡Datos de {region_seleccionada} guardados exitosamente!")
-                        st.rerun() 
-        else: 
-            st.info("No hay datos para la Bolsa 5 - Solo PS.")
-        
-        st.divider()
-        
-        # 4. Bolsa 5 por Etapa
-        st.subheader("⚙ 4. Ult 6 Meses (BOLSA 5 por Etapa)")
-        df_b5 = df[df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)]
-        if not df_b5.empty:
-            td_b5 = pd.pivot_table(df_b5, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            st.table(estilo_resaltado(aplicar_subtotales(td_b5)))
-            generar_boton_descarga(df_b5, 'folios_t4_bolsa5_etapas', btn_key='btn4')
-        else: st.info("No hay datos.")
-
-        st.divider()
-
-        # 5. Portas
-        st.subheader("📞 5. Ult 6 Meses (PORTAS)")
-        df_p = df[(df['PORTABILIDAD']=='SI') & (df['ULTIMOS_6_MESES']=='SI') & (df['ETAPA_OS']=='PS')]
-        if not df_p.empty:
-            td_p = pd.pivot_table(df_p, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            cols = [c for c in orden_columnas if c in td_p.columns] + [c for c in td_p.columns if c not in orden_columnas]
-            st.table(estilo_resaltado(aplicar_subtotales(td_p[cols])))
-            generar_boton_descarga(df_p, 'folios_t5_portas', btn_key='btn5')
-        else: st.info("No hay datos.")
-
-        st.divider()
-
-        # 6. Cambio de Domicilio
-        st.subheader("🏠 6. Ult 6 Meses (CAMB DOM)")        
-        df_cd = df[df['TIPO_MOVIMIENTO'].str.contains('CAMB DOM', case=False, na=False)]
-        if not df_cd.empty:
-            td_cd = pd.pivot_table(df_cd, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-            st.table(estilo_resaltado(aplicar_subtotales(td_cd)))
-            generar_boton_descarga(df_cd, 'folios_t6_cambio_domicilio', btn_key='btn6')
-        else: st.info("No hay datos.")
+                    # Acomodo de columnas respetando las variables de la Tabla 4
+                    cols_t4 = [c for c in orden_columnas if c in td_t4_com.columns] + [c for c in td_t4_com.columns if c not in orden_columnas]
+                    
+                    # Dibujado de la tabla
+                    st.table(estilo_resaltado(aplicar_subtotales(td_t4_com[cols_t4])))
+                    
+                    # ⬇️ BOTÓN DE DESCARGA AÑADIDO ⬇️
+                    generar_boton_descarga(df_t4_tl_com, 'folios_comercial_t4_tl', btn_key='btn_com_4')
+                else:
+                    st.info("No hay folios para las Portabilidades en TL.")

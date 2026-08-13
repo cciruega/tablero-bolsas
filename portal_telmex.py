@@ -68,7 +68,8 @@ st.markdown("""
             width: max-content !important; 
             max-width: 100%; 
             overflow-x: auto; 
-            font-size: 85% !important; 
+            font-size: 85% !important;
+            color: black !important;
         }
         [data-testid="stTable"] table { width: auto !important; }
         
@@ -85,7 +86,8 @@ st.markdown("""
 
         [data-testid="stTable"] th, [data-testid="stTable"] td {
             white-space: nowrap !important;
-            padding: 5px 10px !important; 
+            padding: 5px 10px !important;
+            color: black !important;
         }
 
         /* 📱 ESTILOS PARA CELULARES */

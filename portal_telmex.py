@@ -92,7 +92,8 @@ st.markdown("""
         @media (max-width: 768px) {
             [data-testid="stTable"] th, [data-testid="stTable"] td {
                 font-size: 10px !important; 
-                padding: 4px 6px !important; 
+                padding: 4px 6px !important;
+                color: black !important;
             }
         }
     </style>

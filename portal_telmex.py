@@ -481,9 +481,30 @@ if archivo_a_procesar is not None:
         # =========================================================
         # PESTAÑA 1: VISTA OPERATIVA
         # =========================================================
-        with tab_operativa:
+                with tab_operativa:
+            # 1. Obtener la lista de áreas únicas ya procesadas/corregidas
+            # Se usa dropna() para evitar que valores nulos rompan el filtro y sorted() para orden alfabético
+            areas_disponibles = sorted(df['AREA_CORREGIDA'].dropna().unique())
+
+            # 2. Crear el filtro multiselector en tu vista operativa
+            areas_seleccionadas = st.multiselect(
+                "Selecciona el Área / CT:",
+                options=areas_disponibles,
+                default=areas_disponibles # Al abrir el portal, todas las áreas de la región están seleccionadas
+            )
+
+            # 3. Filtrar el DataFrame original con las áreas que el usuario dejó en el selector
+            if areas_seleccionadas:
+                df_filtrado = df[df['AREA_CORREGIDA'].isin(areas_seleccionadas)]
+            else:
+                # Si el usuario borra todas las áreas, mostramos el df vacío
+                df_filtrado = df.iloc[0:0] 
+                st.warning("⚠️ Por favor, selecciona al menos un área para visualizar los datos.")
+
+            # A PARTIR DE AQUÍ, TODAS LAS TABLAS LEEN 'df_filtrado' EN LUGAR DE 'df'
+            
             st.subheader(f"📑 1. Últimos 6 Meses (Demanda por Bolsa) - {region_seleccionada}")
-            df_6m = df[df['ULTIMOS_6_MESES'] == 'SI']
+            df_6m = df_filtrado[df_filtrado['ULTIMOS_6_MESES'] == 'SI']
             estatus_excluidos = ["7. ASPECTOS TÉCNICOS", "8 PENDIENTES BOLSA VENTAS + CD", "10 NO VENTAS + CD"]
             df_6m = df_6m[~df_6m['ESTATUS_AGR_N2'].isin(estatus_excluidos)]
 
@@ -528,7 +549,7 @@ if archivo_a_procesar is not None:
             st.divider()
 
             st.subheader("✔ 2. Ult 6 Meses (BOLSA 4xDIL2)")
-            df_b4 = df[df['ESTATUS_AGR_N2'].str.contains('4', case=False, na=False)]
+            df_b4 = df_filtrado[df_filtrado['ESTATUS_AGR_N2'].str.contains('4', case=False, na=False)]
             if not df_b4.empty:
                 td_b4 = pd.pivot_table(df_b4, index=['AREA_CORREGIDA', 'ESTATUS_AGR_N1'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 cols = [c for c in orden_columnas if c in td_b4.columns] + [c for c in td_b4.columns if c not in orden_columnas]
@@ -539,7 +560,7 @@ if archivo_a_procesar is not None:
             st.divider()
 
             st.subheader("🛠 3. Ult 6 Meses (BOLSA 5xDIL2 - Solo PS)")
-            df_b5_ps = df[(df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df['ETAPA_OS'] == 'PS')]
+            df_b5_ps = df_filtrado[(df_filtrado['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'PS')]
             if not df_b5_ps.empty:
                 td_b5_ps = pd.pivot_table(df_b5_ps, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b5_ps.columns if c not in orden_columnas]
@@ -550,7 +571,7 @@ if archivo_a_procesar is not None:
             st.divider()
 
             st.subheader("⚙ 4. Ult 6 Meses (BOLSA 5 por Etapa)")
-            df_b5 = df[df['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)]
+            df_b5 = df_filtrado[df_filtrado['ESTATUS_AGR_N2'].str.contains('5', case=False, na=False)]
             if not df_b5.empty:
                 td_b5 = pd.pivot_table(df_b5, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 st.table(estilo_resaltado(aplicar_subtotales(td_b5)))
@@ -560,7 +581,7 @@ if archivo_a_procesar is not None:
             st.divider()
 
             st.subheader("📞 5. Ult 6 Meses (PORTAS)")
-            df_p = df[(df['PORTABILIDAD']=='SI') & (df['ULTIMOS_6_MESES']=='SI') & (df['ETAPA_OS']=='PS')]
+            df_p = df_filtrado[(df_filtrado['PORTABILIDAD']=='SI') & (df_filtrado['ULTIMOS_6_MESES']=='SI') & (df_filtrado['ETAPA_OS']=='PS')]
             if not df_p.empty:
                 td_p = pd.pivot_table(df_p, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 cols = [c for c in orden_columnas if c in td_p.columns] + [c for c in td_p.columns if c not in orden_columnas]
@@ -571,7 +592,7 @@ if archivo_a_procesar is not None:
             st.divider()
 
             st.subheader("🏠 6. Ult 6 Meses (CAMB DOM)")        
-            df_cd = df[df['TIPO_MOVIMIENTO'].str.contains('CAMB DOM', case=False, na=False)]
+            df_cd = df_filtrado[df_filtrado['TIPO_MOVIMIENTO'].str.contains('CAMB DOM', case=False, na=False)]
             if not df_cd.empty:
                 td_cd = pd.pivot_table(df_cd, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 st.table(estilo_resaltado(aplicar_subtotales(td_cd)))

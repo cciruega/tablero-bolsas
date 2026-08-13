@@ -481,7 +481,7 @@ if archivo_a_procesar is not None:
         # =========================================================
         # PESTAÑA 1: VISTA OPERATIVA
         # =========================================================
-                with tab_operativa:
+        with tab_operativa:
             # 1. Obtener la lista de áreas únicas ya procesadas/corregidas
             # Se usa dropna() para evitar que valores nulos rompan el filtro y sorted() para orden alfabético
             areas_disponibles = sorted(df['AREA_CORREGIDA'].dropna().unique())

@@ -613,7 +613,7 @@ if archivo_a_procesar is not None:
                 areas_disponibles = sorted(df['AREA_CORREGIDA'].dropna().unique().tolist())
                 opciones_filtro = ["Todas las Áreas"] + areas_disponibles
                 
-                area_seleccionada_com = st.radio(
+                area_seleccionada_com = st.multiselect(
                     "🔎 Filtrar vista comercial por:", 
                     opciones_filtro, 
                     horizontal=True

@@ -597,7 +597,7 @@ if archivo_a_procesar is not None:
             st.subheader("🛠 6. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
             
             # 1. Se define correctamente la variable usando guiones bajos, sin puntos (df_b69_cp en lugar de df_b5_ps o df_b6.9_cp)
-            df_b69_cp = df_filtrado[(df_filtrado['ESTATUS_AGR_N2'].str.contains('6.9', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'CP')]
+            df_b69_cp = df_filtrado[(df_filtrado['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'CP')]
             
             if not df_b69_cp.empty:
                 # 2. Se usa la misma variable para crear la tabla dinámica

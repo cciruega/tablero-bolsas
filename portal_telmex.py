@@ -594,12 +594,23 @@ if archivo_a_procesar is not None:
 
             st.divider()
 
-            st.subheader("🏠 6. Ult 6 Meses (CAMB DOM)")        
+            st.subheader("🛠 6. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
+            df_b5_ps = df_filtrado[(df_filtrado['ESTATUS_AGR_N2'].str.contains('6.9', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'CP')]
+            if not df_b6.9_cp.empty:
+                td_b5_ps = pd.pivot_table(df_b6.9_cp, index=['AREA_CORREGIDA', 'CT'], columns='Rango x Dil', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                cols = [c for c in orden_columnas if c in td_b5_ps.columns] + [c for c in td_b69_ps.columns if c not in orden_columnas]
+                st.table(estilo_resaltado(aplicar_subtotales(td_b6_bolsa69[cols])))
+                generar_boton_descarga(df_b6.9_cp, 'folios_t6_bolsa69', btn_key='btn3')
+            else: st.info("No hay datos.")
+
+            st.divider()
+
+            st.subheader("🏠 7. Ult 6 Meses (CAMB DOM)")        
             df_cd = df_filtrado[df_filtrado['TIPO_MOVIMIENTO'].str.contains('CAMB DOM', case=False, na=False)]
             if not df_cd.empty:
                 td_cd = pd.pivot_table(df_cd, index=['AREA_CORREGIDA', 'CT'], columns='ETAPA_OS', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
                 st.table(estilo_resaltado(aplicar_subtotales(td_cd)))
-                generar_boton_descarga(df_cd, 'folios_t6_cambio_domicilio', btn_key='btn6')
+                generar_boton_descarga(df_cd, 'folios_t7_cambio_domicilio', btn_key='btn7')
             else: st.info("No hay datos.")
 
         # =========================================================

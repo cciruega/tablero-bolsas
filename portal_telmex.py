@@ -778,3 +778,25 @@ if archivo_a_procesar is not None:
                     generar_boton_descarga(df_t4_tl_com, 'folios_comercial_t4_tl', btn_key='btn_com_4')
                 else:
                     st.info("No hay folios para las Portabilidades en TL.")
+
+                st.subheader("🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
+            
+            # 1. Se define correctamente la variable usando guiones bajos, sin puntos (df_b69_cp en lugar de df_b5_ps o df_b6.9_cp)
+            df_b69_cp = df_filtrado[(df_filtrado['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'CP')]
+            
+            if not df_b69_cp.empty:
+                # 2. Se usa la misma variable para crear la tabla dinámica
+                td_b69_cp = pd.pivot_table(df_b69_cp, index=['AREA_CORREGIDA', 'TIENDA'], columns='CT', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                
+                # 3. Se alinean los nombres en la definición de columnas
+                cols = [c for c in orden_columnas if c in td_b69_cp.columns] + [c for c in td_b69_cp.columns if c not in orden_columnas]
+                
+                # 4. Se imprime la tabla dinámica correcta (td_b69_cp)
+                st.table(estilo_resaltado(aplicar_subtotales(td_b69_cp[cols])))
+                
+                # 5. Se manda llamar la función de descarga con la variable sin el punto
+                generar_boton_descarga(df_b69_cp, 'folios_t6_bolsa69', btn_key='btn_bolsa_69')
+            else: 
+                st.info("No hay datos.")
+
+            st.divider()

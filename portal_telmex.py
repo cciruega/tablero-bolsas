@@ -781,8 +781,8 @@ if archivo_a_procesar is not None:
 
                 st.subheader("🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
             
-            # 1. Se define correctamente la variable usando guiones bajos, sin puntos (df_b69_cp en lugar de df_b5_ps o df_b6.9_cp)
-            df_b69_cp = df_filtrado[(df_filtrado['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_filtrado['ETAPA_OS'] == 'CP')]
+            # 1. Se cambió df_filtrado por df_com para que respete el filtro de área comercial
+            df_b69_cp = df_com[(df_com['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_com['ETAPA_OS'] == 'CP')]
             
             if not df_b69_cp.empty:
                 # 2. Se usa la misma variable para crear la tabla dinámica
@@ -795,7 +795,7 @@ if archivo_a_procesar is not None:
                 st.table(estilo_resaltado(aplicar_subtotales(td_b69_cp[cols])))
                 
                 # 5. Se manda llamar la función de descarga con la variable sin el punto
-                generar_boton_descarga(df_b69_cp, 'folios_t6_bolsa69', btn_key='btn_bolsa_69')
+                generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69')
             else: 
                 st.info("No hay datos.")
 

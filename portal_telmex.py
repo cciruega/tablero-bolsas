@@ -624,7 +624,7 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_cd, 'folios_t7_cambio_domicilio', btn_key='btn7')
             else: st.info("No hay datos.")
 
-        Aquí tienes el bloque de código actualizado con la integración exacta para tu base de datos. He adaptado las variables a los nombres reales de tus columnas (AREA_CORREGIDA y TIENDA) y ubicado el nuevo menú dinámico justo debajo de los botones de radio.   Reemplaza todo el bloque superior de tu Pestaña 2 (desde el inicio hasta justo antes de la Tabla 1) con este código:Python        # =========================================================
+        # =========================================================
         # PESTAÑA 2: VISTA COMERCIAL (Por CAT) - Solo para Monterrey
         # =========================================================
         if region_seleccionada == "Monterrey" and tab_comercial is not None:

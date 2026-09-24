@@ -624,14 +624,14 @@ if archivo_a_procesar is not None:
                 generar_boton_descarga(df_cd, 'folios_t7_cambio_domicilio', btn_key='btn7')
             else: st.info("No hay datos.")
 
-        # =========================================================
+        Aquí tienes el bloque de código actualizado con la integración exacta para tu base de datos. He adaptado las variables a los nombres reales de tus columnas (AREA_CORREGIDA y TIENDA) y ubicado el nuevo menú dinámico justo debajo de los botones de radio.   Reemplaza todo el bloque superior de tu Pestaña 2 (desde el inicio hasta justo antes de la Tabla 1) con este código:Python        # =========================================================
         # PESTAÑA 2: VISTA COMERCIAL (Por CAT) - Solo para Monterrey
         # =========================================================
         if region_seleccionada == "Monterrey" and tab_comercial is not None:
             with tab_comercial:
                 st.subheader("📊 Análisis General por CAT")
                 
-                # Submenú horizontal
+                # Submenú horizontal (Áreas)
                 areas_disponibles = sorted(df['AREA_CORREGIDA'].dropna().unique().tolist())
                 opciones_filtro = ["Todas las Áreas"] + areas_disponibles
                 
@@ -640,6 +640,20 @@ if archivo_a_procesar is not None:
                     opciones_filtro, 
                     horizontal=True
                 )
+                
+                # --- NUEVO: SELECTOR DINÁMICO DE TIENDAS ---
+                # Obtener tiendas únicas dependiendo del área previamente seleccionada
+                if area_seleccionada_com == "Todas las Áreas":
+                    opciones_tiendas = sorted(df['TIENDA'].dropna().unique().tolist())
+                else:
+                    opciones_tiendas = sorted(df[df['AREA_CORREGIDA'] == area_seleccionada_com]['TIENDA'].dropna().unique().tolist())
+                
+                tiendas_seleccionadas = st.multiselect(
+                    "Selecciona la Tienda / CAT:",
+                    options=opciones_tiendas,
+                    default=[]
+                )
+                
                 st.divider()
                 
                 # --- 🧹 LÓGICA EXCLUSIVA COMERCIAL ---
@@ -654,12 +668,14 @@ if archivo_a_procesar is not None:
                     excluir_n2 = '10 NO VENTAS|8 PENDIENTES BOLSA'
                     df_com = df_com[~df_com['ESTATUS_AGR_N2'].astype(str).str.contains(excluir_n2, case=False, na=False, regex=True)]
                 
-                # (SE ELIMINÓ LA REGLA DE REASIGNACIÓN PARA RESPETAR ESTRICTAMENTE EL DISTRITO Y CT)
-
                 # --- ✂️ APLICAR FILTRO DEL SUBMENÚ ---
-                # Si el usuario seleccionó un área específica, filtramos la base de datos comercial
+                # Filtro Nivel 1: Área
                 if area_seleccionada_com != "Todas las Áreas":
                     df_com = df_com[df_com['AREA_CORREGIDA'] == area_seleccionada_com]
+                    
+                # Filtro Nivel 2: Tiendas (Solo filtra si el usuario escogió alguna opción)
+                if tiendas_seleccionadas:
+                    df_com = df_com[df_com['TIENDA'].isin(tiendas_seleccionadas)]
 
                 # --- 📉 TABLA 1: Demanda cruzada por Tienda ---
                 st.subheader(f"📑 1. Últimos 6 Meses (Demanda por Bolsa) - {region_seleccionada}")

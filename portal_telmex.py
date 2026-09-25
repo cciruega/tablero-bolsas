@@ -830,6 +830,8 @@ if archivo_a_procesar is not None:
                 else:
                     st.info("No hay folios para las Portabilidades en TL.")
 
+                st.divider()
+
                 # --- 🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE ---
                 st.subheader("🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
             
@@ -862,7 +864,6 @@ if archivo_a_procesar is not None:
                     generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69') 
 
                 # TABLA C: Nueva Vista (FIELDERS por Empresa Externa)
-                    st.divider()
                     st.markdown("**Desglose FIELDERS por Empresa:**")
                     
                     # El checkbox sirve como interruptor manual

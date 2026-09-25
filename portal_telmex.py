@@ -900,7 +900,6 @@ if archivo_a_procesar is not None:
                                         df_merge['NOM_ESTRATEGIA'] = df_merge['NOM_ESTRATEGIA'].fillna('Empresa por definir')
                                         df_merge.loc[df_merge['NOM_ESTRATEGIA'].str.strip() == '', 'NOM_ESTRATEGIA'] = 'Empresa por definir'
                                         
-                                        # 5. Creamos la nueva tabla dinámica
                                         td_b69_empresas = pd.pivot_table(
                                             df_merge, 
                                             index=['AREA_CORREGIDA', 'TIENDA'], 
@@ -911,6 +910,17 @@ if archivo_a_procesar is not None:
                                             margins=True, 
                                             margins_name='Total'
                                         )
+                                        
+                                        # --- NUEVO: Ordenar columnas de mayor a menor ---
+                                        if 'Total' in td_b69_empresas.columns:
+                                            # Separamos las columnas de las empresas, excluyendo la columna 'Total'
+                                            cols_empresas = [c for c in td_b69_empresas.columns if c != 'Total']
+                                            
+                                            # Ordenamos las empresas basándonos en los valores de la última fila (iloc[-1])
+                                            cols_ordenadas = td_b69_empresas[cols_empresas].iloc[-1].sort_values(ascending=False).index.tolist()
+                                            
+                                            # Aplicamos el nuevo orden a la tabla y regresamos la columna 'Total' al final
+                                            td_b69_empresas = td_b69_empresas[cols_ordenadas + ['Total']]
                                         
                                         # Dibujamos en pantalla
                                         st.table(estilo_resaltado(aplicar_subtotales(td_b69_empresas)))

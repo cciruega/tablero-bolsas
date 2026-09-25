@@ -863,7 +863,7 @@ if archivo_a_procesar is not None:
                 else: 
                     st.info("No hay datos en la Bolsa 6.9 para mostrar.")
 
-                    # TABLA C: Nueva Vista (FIELDERS por Empresa Externa)
+                # TABLA C: Nueva Vista (FIELDERS por Empresa Externa)
                     st.divider()
                     st.markdown("**Desglose FIELDERS por Empresa:**")
                     
@@ -873,7 +873,7 @@ if archivo_a_procesar is not None:
                             try:
                                 # Verificamos que la función exista en tu código
                                 if 'obtener_base_fielders_clarodrive' not in globals():
-                                    st.error("❌ ERROR FATAL: No se encontró la función de extracción. Asegúrate de haber pegado 'def obtener_base_fielders_clarodrive():' al inicio de tu script.")
+                                    st.error("❌ ERROR FATAL: No se encontró la función de extracción.")
                                 else:
                                     # 1. Ejecutamos la extracción
                                     df_empresas = obtener_base_fielders_clarodrive()
@@ -917,7 +917,7 @@ if archivo_a_procesar is not None:
                                         # Dibujamos en pantalla
                                         st.table(estilo_resaltado(aplicar_subtotales(td_b69_empresas)))
                                         
-                                        # Botón de descarga
+                                        # Botón de descarga exclusivo para la nueva subtabla cruzada
                                         generar_boton_descarga(df_merge, 'folios_t5_empresas_fielder', btn_key='btn_com_fielder_emp')
                                     else:
                                         st.warning("⚠️ No hay folios marcados como 'FIELDER' en la Bolsa 6.9 actual para cruzar.")

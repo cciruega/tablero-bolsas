@@ -795,24 +795,37 @@ if archivo_a_procesar is not None:
                 else:
                     st.info("No hay folios para las Portabilidades en TL.")
 
+                # --- 🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE ---
                 st.subheader("🛠 5. BOLSA 6.9 PENDIENTE PAGO GI x COPE")
             
-            # 1. Se cambió df_filtrado por df_com para que respete el filtro de área comercial
-            df_b69_cp = df_com[(df_com['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_com['ETAPA_OS'] == 'CP')]
+                # Filtro principal de la base (se mantiene igual)
+                df_b69_cp = df_com[(df_com['ESTATUS_AGR_N1'].str.contains('6.9', case=False, na=False)) & (df_com['ETAPA_OS'] == 'CP')]
             
-            if not df_b69_cp.empty:
-                # 2. Se usa la misma variable para crear la tabla dinámica
-                td_b69_cp = pd.pivot_table(df_b69_cp, index=['AREA_CORREGIDA', 'TIENDA'], columns='CT', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
-                
-                # 3. Se alinean los nombres en la definición de columnas
-                cols = [c for c in orden_columnas if c in td_b69_cp.columns] + [c for c in td_b69_cp.columns if c not in orden_columnas]
-                
-                # 4. Se imprime la tabla dinámica correcta (td_b69_cp)
-                st.table(estilo_resaltado(aplicar_subtotales(td_b69_cp[cols])))
-                
-                # 5. Se manda llamar la función de descarga con la variable sin el punto
-                generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69')
-            else: 
-                st.info("No hay datos.")
+                if not df_b69_cp.empty:
+                    # TABLA A: Vista Original (Por CT)
+                    st.markdown("**Desglose por CT:**")
+                    td_b69_cp = pd.pivot_table(df_b69_cp, index=['AREA_CORREGIDA', 'TIENDA'], columns='CT', values='FOLIO', aggfunc='count', fill_value=0, margins=True, margins_name='Total')
+                    cols_ct = [c for c in orden_columnas if c in td_b69_cp.columns] + [c for c in td_b69_cp.columns if c not in orden_columnas]
+                    st.table(estilo_resaltado(aplicar_subtotales(td_b69_cp[cols_ct])))
+                    
+                    # TABLA B: Nueva Vista (Por CANAL)
+                    st.markdown("**Desglose por CANAL:**")
+                    td_b69_canal = pd.pivot_table(
+                        df_b69_cp, 
+                        index=['AREA_CORREGIDA', 'TIENDA'], 
+                        columns='CANAL', 
+                        values='FOLIO', 
+                        aggfunc='count', 
+                        fill_value=0, 
+                        margins=True, 
+                        margins_name='Total general'
+                    )
+                    # Imprimimos la subtabla aplicando el mismo formato de estilos
+                    st.table(estilo_resaltado(aplicar_subtotales(td_b69_canal)))
+                    
+                    # Botón de descarga unificado para ambas vistas
+                    generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69')
+                else: 
+                    st.info("No hay datos en la Bolsa 6.9 para mostrar.")
 
-            st.divider()
+                st.divider()

@@ -10,6 +10,39 @@ import zipfile
 import io
 from streamlit_gsheets import GSheetsConnection
 
+@st.cache_data(ttl=3600, show_spinner=False)  # Guarda el archivo en memoria por 1 hora
+def obtener_base_fielders_clarodrive():
+    # Se agrega /download para invocar la descarga directa de la carpeta compartida
+    url = "https://i0000.clarodrive.com/s/9LdJSbwx9yBC5mi/download"
+    res = requests.get(url)
+    res.raise_for_status()
+    
+    # Manejo dinámico: Clarodrive puede mandar un ZIP con varios archivos o el archivo directo
+    try:
+        with zipfile.ZipFile(io.BytesIO(res.content)) as z:
+            archivos_xlsx = [f for f in z.infolist() if f.filename.lower().endswith('.xlsx')]
+            if archivos_xlsx:
+                # Tomamos el más reciente basado en la fecha de modificación interna
+                archivos_xlsx.sort(key=lambda x: x.date_time)
+                with z.open(archivos_xlsx[-1]) as f:
+                    contenido_excel = f.read()
+            else:
+                # Los xlsx son zips internamente. Si no tiene xlsx dentro, es el archivo final.
+                contenido_excel = res.content
+    except zipfile.BadZipFile:
+        contenido_excel = res.content
+        
+    # Leemos fila 3 (header=2) y estrictamente las columnas P y Y
+    df_ext = pd.read_excel(
+        io.BytesIO(contenido_excel), 
+        sheet_name='Detalle1', 
+        header=2, 
+        usecols="P,Y" 
+    )
+    # Renombramos a la fuerza para ignorar errores por espacios ocultos en los títulos de Excel
+    df_ext.columns = ['osalta', 'NOM_ESTRATEGIA']
+    return df_ext
+
 st.set_page_config(page_title="Tablero Operativo Bolsas", layout="wide")
 
 # ---------------------------------------------------------
@@ -827,5 +860,60 @@ if archivo_a_procesar is not None:
                     generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69')
                 else: 
                     st.info("No hay datos en la Bolsa 6.9 para mostrar.")
+
+                    # TABLA C: Nueva Vista (FIELDERS por Empresa Externa)
+                    st.divider()
+                    st.markdown("**Desglose FIELDERS por Empresa:**")
+                    
+                    # El checkbox sirve como interruptor manual que preserva el estado en pantalla
+                    if st.checkbox("🚀 Generar y Cruzar Base de Empresas (Clarodrive)"):
+                        with st.spinner("Conectando con Clarodrive, descargando y cruzando bases..."):
+                            try:
+                                # 1. Ejecutamos la extracción (o cargamos del caché si ya se bajó)
+                                df_empresas = obtener_base_fielders_clarodrive()
+                                
+                                # 2. Filtramos df_b69_cp para dejar estrictamente al canal Fielder
+                                df_fielders_b69 = df_b69_cp[df_b69_cp['CANAL'].astype(str).str.upper().str.contains('FIELDER')].copy()
+                                
+                                if not df_fielders_b69.empty:
+                                    # Normalizamos los folios para asegurar un Match perfecto (quitando espacios en blanco)
+                                    df_fielders_b69['FOLIO'] = df_fielders_b69['FOLIO'].astype(str).str.strip()
+                                    df_empresas['osalta'] = df_empresas['osalta'].astype(str).str.strip()
+                                    
+                                    # 3. Cruzamos nuestra tabla con la base de Clarodrive (LEFT JOIN)
+                                    df_merge = pd.merge(
+                                        df_fielders_b69, 
+                                        df_empresas, 
+                                        left_on='FOLIO', 
+                                        right_on='osalta', 
+                                        how='left'
+                                    )
+                                    
+                                    # 4. Regla de vacíos: Si no cruzó o viene en blanco, asignar texto por defecto
+                                    df_merge['NOM_ESTRATEGIA'] = df_merge['NOM_ESTRATEGIA'].fillna('Empresa por definir')
+                                    df_merge.loc[df_merge['NOM_ESTRATEGIA'].str.strip() == '', 'NOM_ESTRATEGIA'] = 'Empresa por definir'
+                                    
+                                    # 5. Creamos la nueva tabla dinámica
+                                    td_b69_empresas = pd.pivot_table(
+                                        df_merge, 
+                                        index=['AREA_CORREGIDA', 'TIENDA'], 
+                                        columns='NOM_ESTRATEGIA', 
+                                        values='FOLIO', 
+                                        aggfunc='count', 
+                                        fill_value=0, 
+                                        margins=True, 
+                                        margins_name='Total'
+                                    )
+                                    
+                                    # Dibujamos en pantalla aplicando los mismos estilos
+                                    st.table(estilo_resaltado(aplicar_subtotales(td_b69_empresas)))
+                                    
+                                    # Botón de descarga exclusivo para la data ya cruzada con empresas
+                                    generar_boton_descarga(df_merge, 'folios_t5_empresas_fielder', btn_key='btn_com_fielder_emp')
+                                else:
+                                    st.info("No hay folios FIELDER en la selección operativa actual para cruzar.")
+                                    
+                            except Exception as e:
+                                st.error(f"Error al conectar o procesar el archivo desde Clarodrive: {e}")
 
                 st.divider()

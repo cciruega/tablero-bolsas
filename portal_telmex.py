@@ -818,14 +818,7 @@ if archivo_a_procesar is not None:
                         aggfunc='count', 
                         fill_value=0, 
                         margins=True, 
-                        margins_name='Total general'
+                        margins_name='Total'  # <-- Corrección: Se regresa a 'Total' para que tu función lo reconozca
                     )
                     # Imprimimos la subtabla aplicando el mismo formato de estilos
                     st.table(estilo_resaltado(aplicar_subtotales(td_b69_canal)))
-                    
-                    # Botón de descarga unificado para ambas vistas
-                    generar_boton_descarga(df_b69_cp, 'folios_t5_bolsa69', btn_key='btn_com_bolsa_69')
-                else: 
-                    st.info("No hay datos en la Bolsa 6.9 para mostrar.")
-
-                st.divider()

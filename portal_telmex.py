@@ -278,6 +278,31 @@ if archivo_a_procesar is not None:
             st.stop()
 
     if datos_listos:
+        # =========================================================
+        # 🗺️ NUEVO: FILTRO GLOBAL POR MUNICIPIO
+        # =========================================================
+        if 'MUNICIPIO' in df.columns:
+            # 1. Limpiamos la columna por si trae espacios o celdas vacías de Excel
+            df['MUNICIPIO'] = df['MUNICIPIO'].astype(str).str.strip().str.upper()
+            df['MUNICIPIO'] = df['MUNICIPIO'].replace('NAN', 'SIN MUNICIPIO')
+            
+            # 2. Obtenemos la lista única y ordenada alfabéticamente
+            municipios_disponibles = sorted([m for m in df['MUNICIPIO'].unique() if m != ''])
+            
+            # 3. Creamos el selector (Por defecto vacío: default=[])
+            municipios_seleccionados = st.multiselect(
+                "🗺️ Filtrar por Municipio (Opcional - Aplica a todo el portal):",
+                options=municipios_disponibles,
+                default=[]
+            )
+            
+            # 4. Condición principal: Si seleccionas algo, recorta la matriz entera
+            if municipios_seleccionados:
+                df = df[df['MUNICIPIO'].isin(municipios_seleccionados)]
+                
+        st.divider()
+        # =========================================================
+        
         orden_columnas = ['0 A 2', '3 A 5', '6 A 10', '11 A 20', '21 A 50', '51 A 100', '> 100', 'Sin Rango', 'Total']
 
         # =========================================================================

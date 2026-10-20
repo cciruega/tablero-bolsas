@@ -278,25 +278,31 @@ if archivo_a_procesar is not None:
             st.stop()
 
     if datos_listos:
-        # =========================================================
+# =========================================================
         # 🗺️ NUEVO: FILTRO GLOBAL POR MUNICIPIO
         # =========================================================
         if 'MUNICIPIO' in df.columns:
-            # 1. Limpiamos la columna por si trae espacios o celdas vacías de Excel
+            # 1. Rellenamos los vacíos matemáticos PRIMERO para evitar que Pandas colapse
+            df['MUNICIPIO'] = df['MUNICIPIO'].fillna('SIN MUNICIPIO')
+            
+            # 2. Convertimos todo a texto forzado, quitamos espacios y hacemos mayúsculas
             df['MUNICIPIO'] = df['MUNICIPIO'].astype(str).str.strip().str.upper()
-            df['MUNICIPIO'] = df['MUNICIPIO'].replace('NAN', 'SIN MUNICIPIO')
             
-            # 2. Obtenemos la lista única y ordenada alfabéticamente
-            municipios_disponibles = sorted([m for m in df['MUNICIPIO'].unique() if m != ''])
+            # 3. Si quedó la palabra literal 'NAN' o un texto vacío, lo unificamos
+            df.loc[df['MUNICIPIO'] == 'NAN', 'MUNICIPIO'] = 'SIN MUNICIPIO'
+            df.loc[df['MUNICIPIO'] == '', 'MUNICIPIO'] = 'SIN MUNICIPIO'
             
-            # 3. Creamos el selector (Por defecto vacío: default=[])
+            # 4. Obtenemos la lista ordenada forzando nuevamente que todo elemento sea string
+            municipios_disponibles = sorted([str(m) for m in df['MUNICIPIO'].unique()])
+            
+            # 5. Creamos el selector (Por defecto vacío: default=[])
             municipios_seleccionados = st.multiselect(
                 "🗺️ Filtrar por Municipio (Opcional - Aplica a todo el portal):",
                 options=municipios_disponibles,
                 default=[]
             )
             
-            # 4. Condición principal: Si seleccionas algo, recorta la matriz entera
+            # 6. Condición principal: Si seleccionas algo, recorta la matriz entera
             if municipios_seleccionados:
                 df = df[df['MUNICIPIO'].isin(municipios_seleccionados)]
                 

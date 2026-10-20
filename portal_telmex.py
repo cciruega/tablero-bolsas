@@ -93,6 +93,7 @@ with col_selector:
         "📍 Selecciona la Región a visualizar:",
         ["Monterrey", "Tamaulipas"]
     )
+    espacio_municipio = st.empty()
 # ---------------------------------------------------------
 
 # --- INYECCIÓN DE CSS PARA COMPACTAR, ESCALAR Y HACER RESPONSIVAS LAS TABLAS ---
@@ -278,35 +279,28 @@ if archivo_a_procesar is not None:
             st.stop()
 
     if datos_listos:
-# =========================================================
+        # =========================================================
         # 🗺️ NUEVO: FILTRO GLOBAL POR MUNICIPIO
         # =========================================================
         if 'MUNICIPIO' in df.columns:
-            # 1. Rellenamos los vacíos matemáticos PRIMERO para evitar que Pandas colapse
-            df['MUNICIPIO'] = df['MUNICIPIO'].fillna('SIN MUNICIPIO')
+            # Rellenamos vacíos y forzamos texto puro
+            df['MUNICIPIO'] = df['MUNICIPIO'].fillna('SIN MUNICIPIO').astype(str).str.strip().str.upper()
+            df['MUNICIPIO'] = df['MUNICIPIO'].replace(['NAN', 'NAT', 'NONE'], 'SIN MUNICIPIO')
             
-            # 2. Convertimos todo a texto forzado, quitamos espacios y hacemos mayúsculas
-            df['MUNICIPIO'] = df['MUNICIPIO'].astype(str).str.strip().str.upper()
+            municipios_disponibles = sorted([str(m) for m in df['MUNICIPIO'].unique() if str(m) != ''])
             
-            # 3. Si quedó la palabra literal 'NAN' o un texto vacío, lo unificamos
-            df.loc[df['MUNICIPIO'] == 'NAN', 'MUNICIPIO'] = 'SIN MUNICIPIO'
-            df.loc[df['MUNICIPIO'] == '', 'MUNICIPIO'] = 'SIN MUNICIPIO'
+            # 📌 Mandamos llamar al espacio vacío de arriba y le insertamos el selector
+            with espacio_municipio:
+                municipios_seleccionados = st.multiselect(
+                    "📍 Municipio (Opcional - Aplica a todo el portal):",
+                    options=municipios_disponibles,
+                    default=[]
+                )
             
-            # 4. Obtenemos la lista ordenada forzando nuevamente que todo elemento sea string
-            municipios_disponibles = sorted([str(m) for m in df['MUNICIPIO'].unique()])
-            
-            # 5. Creamos el selector (Por defecto vacío: default=[])
-            municipios_seleccionados = st.multiselect(
-                "🗺️ Filtrar por Municipio (Opcional - Aplica a todo el portal):",
-                options=municipios_disponibles,
-                default=[]
-            )
-            
-            # 6. Condición principal: Si seleccionas algo, recorta la matriz entera
+            # Recortamos la base de datos si el usuario eligió algo
             if municipios_seleccionados:
                 df = df[df['MUNICIPIO'].isin(municipios_seleccionados)]
                 
-        st.divider()
         # =========================================================
         
         orden_columnas = ['0 A 2', '3 A 5', '6 A 10', '11 A 20', '21 A 50', '51 A 100', '> 100', 'Sin Rango', 'Total']
